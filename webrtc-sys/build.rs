@@ -90,7 +90,6 @@ fn main() {
         webrtc_include.clone(),
         webrtc_include.join("third_party/abseil-cpp/"),
         webrtc_include.join("third_party/libyuv/include/"),
-        webrtc_include.join("third_party/libc++/"),
         // For mac & ios
         webrtc_include.join("sdk/objc"),
         webrtc_include.join("sdk/objc/base"),
@@ -193,7 +192,7 @@ fn main() {
 
             configure_android_sysroot(&mut builder);
 
-            builder.file("src/android.cpp").flag("-std=c++20").cpp_link_stdlib("c++_static");
+            builder.file("src/android.cpp").flag("-std=c++20").cpp_link_stdlib("c++_shared");
         }
         _ => {
             panic!("Unsupported target, {}", target_os);

@@ -24,9 +24,18 @@ use std::{
 use fs2::FileExt;
 use regex::Regex;
 use reqwest::StatusCode;
+use flate2::read::GzDecoder;
+use tar::Archive;
+use std::thread;
+use std::os::unix::fs::symlink as unix_symlink;
+#[cfg(target_os = "windows")]
+use std::os::windows::fs::symlink_dir as windows_symlink;
+use std::time::Duration;
 
 pub const SCRATH_PATH: &str = "livekit_webrtc";
+pub const SCRATH_PREFIXED_PATH: &str = "livekit_prefixed_webrtc";
 pub const WEBRTC_TAG: &str = "webrtc-b99fd2c-6";
+pub const WEBRTC_PREFIXED_RELEASE: &str = "v125.6422.06.1";
 pub const IGNORE_DEFINES: [&str; 2] = ["CR_CLANG_REVISION", "CR_XCODE_VERSION"];
 
 pub fn target_os() -> String {
@@ -59,6 +68,16 @@ pub fn target_arch() -> String {
     .to_owned()
 }
 
+pub fn target_prefixed_arch() -> String {
+  let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+  match target_arch.as_str() {
+      "arm" => "armeabi-v7a",
+      "aarch64" => "arm64-v8a",
+      _ => &target_arch,
+  }
+  .to_owned()
+}
+
 /// The full name of the webrtc library
 /// e.g. mac-x64-release (Same name on GH releases)
 pub fn webrtc_triple() -> String {
@@ -82,6 +101,13 @@ pub fn custom_dir() -> Option<path::PathBuf> {
     None
 }
 
+pub fn custom_prefixed_dir() -> Option<path::PathBuf> {
+  if let Ok(path) = env::var("LK_PREFIXED_CUSTOM_WEBRTC") {
+      return Some(path::PathBuf::from(path));
+  }
+  None
+}
+
 /// Location of the downloaded webrtc binaries
 /// The reason why we don't use OUT_DIR is because we sometimes need to share the same binaries
 /// across multiple crates without dependencies constraints
@@ -96,12 +122,27 @@ pub fn prebuilt_dir() -> path::PathBuf {
     ))
 }
 
+pub fn prebuilt_prefixed_dir() -> path::PathBuf {
+  let target_dir = scratch::path(SCRATH_PREFIXED_PATH);
+  path::Path::new(&target_dir).join(format!(
+      "livekit/{}",
+      WEBRTC_PREFIXED_RELEASE
+  ))
+}
+
 pub fn download_url() -> String {
     format!(
         "https://github.com/livekit/client-sdk-rust/releases/download/{}/{}.zip",
         WEBRTC_TAG,
         format!("webrtc-{}", webrtc_triple())
     )
+}
+
+pub fn download_prefixed_url() -> String {
+  format!(
+      "https://github.com/webrtc-sdk/webrtc-build/releases/download/{}/webrtc.android_prefixed.tar.gz",
+      WEBRTC_PREFIXED_RELEASE
+  )
 }
 
 /// Used location of libwebrtc depending on whether it's a custom build or not
@@ -111,6 +152,14 @@ pub fn webrtc_dir() -> path::PathBuf {
     }
 
     prebuilt_dir()
+}
+
+pub fn webrtc_prefixed_dir() -> path::PathBuf {
+  if let Some(path) = custom_prefixed_dir() {
+      return path;
+  }
+
+  prebuilt_prefixed_dir()
 }
 
 pub fn webrtc_defines() -> Vec<(String, Option<String>)> {
@@ -153,7 +202,7 @@ pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
         .output()
         .expect("failed to run llvm-readelf");
 
-    let jni_regex = Regex::new(r"(Java_org_webrtc.*)").unwrap();
+    let jni_regex = Regex::new(r"(Java_livekit_org_webrtc.*)").unwrap();
     let content = String::from_utf8_lossy(&readelf_output.stdout);
     let jni_symbols: Vec<&str> =
         jni_regex.captures_iter(&content).map(|cap| cap.get(1).unwrap().as_str()).collect();
@@ -189,7 +238,9 @@ pub fn download_webrtc() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let mut resp = reqwest::blocking::get(download_url())?;
+    let download_url = download_url();
+
+    let mut resp = reqwest::blocking::get(download_url)?;
     if resp.status() != StatusCode::OK {
         return Err(format!("failed to download webrtc: {}", resp.status()).into());
     }
@@ -204,6 +255,124 @@ pub fn download_webrtc() -> Result<(), Box<dyn Error>> {
     drop(archive);
 
     fs::remove_file(tmp_path)?;
+    Ok(())
+}
+
+pub fn download_webrtc_prefixed() -> Result<(), Box<dyn Error>> {
+    let dir = scratch::path(SCRATH_PREFIXED_PATH);
+    let flock = File::create(dir.join(".lock"))?;
+    flock.lock_exclusive()?;
+
+    let webrtc_dir = webrtc_prefixed_dir();
+    if webrtc_dir.exists() {
+        return Ok(());
+    }
+
+    let download_url = download_prefixed_url();
+
+    let mut resp = reqwest::blocking::get(download_url)?;
+    if resp.status() != StatusCode::OK {
+        return Err(format!("failed to download webrtc: {}", resp.status()).into());
+    }
+
+    let tmp_path_targz = env::var("OUT_DIR").unwrap() + "/webrtc_prefixed.tar.gz";
+    let tmp_path_targz = path::Path::new(&tmp_path_targz);
+
+    let mut tar_gz_file = File::create(&tmp_path_targz)?;
+    resp.copy_to(&mut tar_gz_file)?;
+
+    // Descomprimir el TAR.GZ
+    let tar_gz_file = File::open(&tmp_path_targz)?;
+    let tar = GzDecoder::new(tar_gz_file);
+    let mut archive = Archive::new(tar);
+
+    // Extraer solo la carpeta "webrtc"
+    std::fs::create_dir_all(&webrtc_dir)?;
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?;
+        if let Some(path_str) = path.to_str() {
+            if path_str.starts_with("webrtc") {
+                let target_path = webrtc_dir.join(path.strip_prefix("webrtc")?);
+                if let Some(parent) = target_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                entry.unpack(&target_path)?;
+            }
+        }
+    }
+    fs::remove_file(tmp_path_targz)?;
+    Ok(())
+}
+
+pub fn merge_webrtc_lib() -> Result<(), Box<dyn Error>> {
+    // Overwrite libwebrtc.a origin and dest paths
+    let webrtc_dir = webrtc_dir();
+    let webrtc_lib = webrtc_dir.join("lib").join("libwebrtc.a");
+
+    let webrtc_origin_dir = webrtc_prefixed_dir();
+    let webrtc_origin_target_lib = webrtc_origin_dir.join("lib").join(target_prefixed_arch()).join("libwebrtc.a");
+
+    fs::copy(&webrtc_origin_target_lib, &webrtc_lib)?;
+
+    // Overwrite include folder
+    let include_dir = webrtc_dir.join("include");
+    let include_origin_dir = webrtc_prefixed_dir().join("include");
+
+    // Remove include (directory or symlink)
+    if include_dir.exists() {
+        let metadata = fs::metadata(include_dir)?;
+
+        if metadata.is_dir() {
+            println!("Removing directory: {}", include_dir.display());
+            fs::remove_dir_all(include_dir)?;
+        } else {
+            println!("Removing file: {}", include_dir.display());
+            fs::remove_file(include_dir)?;
+        }
+    } else {
+        println!("Path does not exist: {}", include_dir.display());
+    }
+
+    // Creating symlink
+    println!("Creating symlink: {} -> {}", include_dir.display(), include_origin_dir.display());
+    create_symlink(&include_origin_dir, &include_dir)?;
+
+    // Loop to check if symlink has been created
+    let max_retries = 5;
+    let retry_delay = Duration::from_millis(50);
+
+    for i in 0..max_retries {
+        if fs::metadata(&include_dir).is_ok() {
+            break; // Symlink created
+        } else {
+            eprintln!("Attempt {}/{}: Symlink not yet accessible, retrying...", i + 1, max_retries);
+            thread::sleep(retry_delay);
+        }
+    }
+
+    // Check if symlink exists
+    if fs::metadata(&include_dir).is_err() {
+        eprintln!("Error: Symlink creation failed after multiple retries.");
+        return Err("Symlink creation failed".into());
+    }
+
+    println!("Merged succesfuly");
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn create_symlink(original: &path::Path, link: &path::Path) -> Result<(), Box<dyn Error>> {
+    println!("Creating Windows symlink: {} -> {}", link.display(), original.display());
+    windows_symlink(original, link)?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn create_symlink(original: &path::Path, link: &path::Path) -> Result<(), Box<dyn Error>> {
+    println!("Creating Unix symlink: {} -> {}", link.display(), original.display());
+    unix_symlink(original, link)?;
     Ok(())
 }
 

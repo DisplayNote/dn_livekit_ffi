@@ -22,6 +22,8 @@ fn main() {
     let webrtc_dir = webrtc_sys_build::webrtc_dir();
     if !webrtc_dir.exists() {
         webrtc_sys_build::download_webrtc().unwrap();
+        webrtc_sys_build::download_webrtc_prefixed().unwrap();
+        webrtc_sys_build::merge_webrtc_lib().unwrap();
     }
 
     {

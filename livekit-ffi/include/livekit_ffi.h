@@ -16,6 +16,8 @@ constexpr static const FfiHandleId INVALID_HANDLE = 0;
 
 extern "C" {
 
+void livekit_ffi_initialize(FfiCallbackFn cb, bool capture_logs);
+
 FfiHandleId livekit_ffi_request(const uint8_t *data, size_t len,
                                 const uint8_t **res_ptr, size_t *res_len);
 
