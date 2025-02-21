@@ -1,3 +1,68 @@
+# LiveKit-FFI Fork for WebRTC with livekit.org.webrtc Prefix
+
+This repository is a fork of [livekit-ffi](https://github.com/livekit/livekit-ffi) to enable the use of WebRTC with the `livekit.org.webrtc` prefix in the Android library. This allows integrating two different WebRTC libraries within the same project.
+
+## Cloning and Checking Out a Tag
+
+To get started, clone the repository and switch to the desired tag:
+
+```sh
+git clone https://github.com/DisplayNote/dn_livekit_ffi.git
+cd dn_livekit_ffi
+git checkout <tag-to-generate>
+```
+
+## Applying Changes
+
+To apply necessary modifications, use `git rebase HEAD~N` to obtain the commits from the previous tag and resolve any conflicts that arise.
+
+## Generating Conan Build Directory
+
+Once changes are applied, generate the Conan build directory, which will contain the necessary files for uploading to Conan.
+
+### Windows:
+```sh
+generate_conan_build.bat --platform windows
+generate_conan_build.bat --platform android
+```
+
+### Linux:
+```sh
+./generate_conan_build.sh --platform android
+```
+**Note:** Windows builds cannot be compiled from Linux.
+
+After execution, a `livekit-ffi_conan` directory will be created at the root of the project, containing the necessary files for Conan package export and upload.
+You must be to insert the correct version to upload in your `conanfile.py`
+
+## Exporting and Uploading to Conan
+
+To export the package for different profiles, execute the following command:
+
+```sh
+conan export-pkg . livekit-ffi/0.7.2@dn/stable -pr android.arm64-v8a.debug -f &&
+conan export-pkg . livekit-ffi/0.7.2@dn/stable -pr android.arm64-v8a.release -f &&
+conan export-pkg . livekit-ffi/0.7.2@dn/stable -pr android.armeabi-v7a.debug -f &&
+conan export-pkg . livekit-ffi/0.7.2@dn/stable -pr android.armeabi-v7a.release -f &&
+conan export-pkg . livekit-ffi/0.7.2@dn/stable -pr msvc19.x86_64.debug -f &&
+conan export-pkg . livekit-ffi/0.7.2@dn/stable -pr msvc19.x86_64.release -f
+```
+
+Finally, upload the package to the Conan repository:
+
+```sh
+conan upload livekit-ffi/0.7.2@dn/stable -r dn --all
+```
+
+Replace `0.7.2` with the appropriate tag version as needed.
+
+---
+
+This fork ensures compatibility with projects requiring multiple WebRTC implementations while maintaining seamless integration with Conan package management.
+
+---
+
+
 <!--BEGIN_BANNER_IMAGE-->
 
 <picture>
