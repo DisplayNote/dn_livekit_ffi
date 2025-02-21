@@ -75,11 +75,16 @@ fn main() {
     ]);
 
     let webrtc_dir = webrtc_sys_build::webrtc_dir();
+    let webrtc_prefixed_dir = webrtc_sys_build::webrtc_prefixed_dir();
     let webrtc_include = webrtc_dir.join("include");
     let webrtc_lib = webrtc_dir.join("lib");
 
     if !webrtc_dir.exists() {
         webrtc_sys_build::download_webrtc().unwrap();
+    }
+    if !webrtc_prefixed_dir.exists() {
+        webrtc_sys_build::download_webrtc_prefixed().unwrap();
+        webrtc_sys_build::merge_webrtc_lib().unwrap();
     }
 
     builder.includes(&[
@@ -87,7 +92,7 @@ fn main() {
         webrtc_include.clone(),
         webrtc_include.join("third_party/abseil-cpp/"),
         webrtc_include.join("third_party/libyuv/include/"),
-        webrtc_include.join("third_party/libc++/"),
+        //webrtc_include.join("third_party/libc++/"),
         // For mac & ios
         webrtc_include.join("sdk/objc"),
         webrtc_include.join("sdk/objc/base"),
@@ -193,7 +198,8 @@ fn main() {
 
             configure_android_sysroot(&mut builder);
 
-            builder.file("src/android.cpp").flag("-std=c++20").cpp_link_stdlib("c++_static");
+            builder.file("src/android.cpp").flag("-std=c++20").cpp_link_stdlib("c++_shared");
+            //builder.file("src/android.cpp").flag("-std=c++20").cpp_link_stdlib("c++_static");
         }
         _ => {
             panic!("Unsupported target, {}", target_os);
