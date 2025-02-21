@@ -13,17 +13,14 @@
 // limitations under the License.
 
 use std::{
-    env,
-    error::Error,
-    fs::{self, File},
-    io::{self, BufRead, Write},
-    path,
-    process::Command,
+    env, error::Error, fs::{self, File}, io::{self, BufRead, Write}, path, process::Command
 };
 
 use fs2::FileExt;
 use regex::Regex;
 use reqwest::StatusCode;
+use flate2::read::GzDecoder;
+use tar::Archive;
 
 pub const SCRATH_PATH: &str = "livekit_webrtc";
 pub const WEBRTC_TAG: &str = "webrtc-b951613-4";
@@ -59,6 +56,16 @@ pub fn target_arch() -> String {
     .to_owned()
 }
 
+pub fn target_prefixed_arch() -> String {
+  let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+  match target_arch.as_str() {
+      "arm" => "armeabi-v7a",
+      "aarch64" => "arm64-v8a",
+      _ => &target_arch,
+  }
+  .to_owned()
+}
+
 /// The full name of the webrtc library
 /// e.g. mac-x64-release (Same name on GH releases)
 pub fn webrtc_triple() -> String {
@@ -77,6 +84,14 @@ pub fn use_debug() -> bool {
 /// The location of the custom build is defined by the user
 pub fn custom_dir() -> Option<path::PathBuf> {
     if let Ok(path) = env::var("LK_CUSTOM_WEBRTC") {
+        return Some(path::PathBuf::from(path));
+    }
+    None
+}
+
+/// The location of the artifact build is defined by the user
+pub fn artifact_dir() -> Option<path::PathBuf> {
+    if let Ok(path) = env::var("LK_ARTIFACT_WEBRTC") {
         return Some(path::PathBuf::from(path));
     }
     None
@@ -110,7 +125,7 @@ pub fn webrtc_dir() -> path::PathBuf {
         return path;
     }
 
-    prebuilt_dir()
+    return prebuilt_dir();
 }
 
 pub fn webrtc_defines() -> Vec<(String, Option<String>)> {
@@ -136,7 +151,8 @@ pub fn webrtc_defines() -> Vec<(String, Option<String>)> {
 }
 
 pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
-    download_webrtc()?;
+    //download_webrtc()?;
+    extract_artifact_webrtc()?;
 
     let toolchain = android_ndk_toolchain()?;
     let toolchain_bin = toolchain.join("bin");
@@ -153,7 +169,7 @@ pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
         .output()
         .expect("failed to run llvm-readelf");
 
-    let jni_regex = Regex::new(r"(Java_org_webrtc.*)").unwrap();
+    let jni_regex = Regex::new(r"(Java_livekit_org_webrtc.*)").unwrap();
     let content = String::from_utf8_lossy(&readelf_output.stdout);
     let jni_symbols: Vec<&str> =
         jni_regex.captures_iter(&content).map(|cap| cap.get(1).unwrap().as_str()).collect();
@@ -179,9 +195,44 @@ pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+pub fn extract_artifact_webrtc() -> Result<(), Box<dyn Error>> {
+    let dir = scratch::path(SCRATH_PATH);
+    let flock = fs::File::create(dir.join(".lock"))?;
+    flock.lock_exclusive()?;
+
+    if let Some(artifact_dir) = artifact_dir() {
+        let webrtc_dir = webrtc_dir();
+        if webrtc_dir.exists() {
+            return Ok(());
+        }
+
+        let tmp_path = artifact_dir.join(webrtc_triple() + ".zip");
+        let tmp_path = path::Path::new(&tmp_path);
+        if !tmp_path.exists() {
+            return Err(format!("Zip file not found: {}", tmp_path.display()).into());
+        }
+
+        let file = fs::File::options().read(true).open(tmp_path)?;
+        let mut archive = zip::ZipArchive::new(file)?;
+        let parent_dir: &path::Path = webrtc_dir.parent().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("We cannot get the parent of: {}", webrtc_dir.display()),
+            )
+        })?;
+
+        archive.extract(parent_dir)?;
+        fs::remove_file(tmp_path)?;
+
+        return Ok(());
+    }
+
+    return Err(format!("We cannot found the artifact dir: {:?}", artifact_dir()).into());
+}
+
 pub fn download_webrtc() -> Result<(), Box<dyn Error>> {
     let dir = scratch::path(SCRATH_PATH);
-    let flock = File::create(dir.join(".lock"))?;
+    let flock = fs::File::create(dir.join(".lock"))?;
     flock.lock_exclusive()?;
 
     let webrtc_dir = webrtc_dir();
@@ -189,7 +240,9 @@ pub fn download_webrtc() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let mut resp = reqwest::blocking::get(download_url())?;
+    let download_url = download_url();
+
+    let mut resp = reqwest::blocking::get(download_url)?;
     if resp.status() != StatusCode::OK {
         return Err(format!("failed to download webrtc: {}", resp.status()).into());
     }
@@ -204,6 +257,7 @@ pub fn download_webrtc() -> Result<(), Box<dyn Error>> {
     drop(archive);
 
     fs::remove_file(tmp_path)?;
+
     Ok(())
 }
 

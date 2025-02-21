@@ -16,6 +16,7 @@
 
 arch=""
 profile="release"
+webrtc_commit="b951613"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -67,10 +68,16 @@ then
 fi
 
 cd src
+# Change to commit needed
+git fetch origin --tags --prune
+git reset --hard "$webrtc_commit"
+gclient sync -D --no-history --reset
+
 # git apply "$COMMAND_DIR/patches/add_licenses.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 git apply "$COMMAND_DIR/patches/ssl_verify_callback_with_native_handle.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 git apply "$COMMAND_DIR/patches/add_deps.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 git apply "$COMMAND_DIR/patches/android_use_libunwind.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
+git apply "$COMMAND_DIR/patches/jni_prefix.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 cd ..
 
 mkdir -p "$ARTIFACTS_DIR/lib"
@@ -117,6 +124,9 @@ ninja -C "$OUTPUT_DIR" :default \
 # don't include nasm
 ar -rc "$ARTIFACTS_DIR/lib/libwebrtc.a" `find "$OUTPUT_DIR/obj" -name '*.o' -not -path "*/third_party/nasm/*"`
 
+# shadow packaging jar to have the package name livekit.org.webrtc
+./shadow_jar.sh $OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar $OUTPUT_DIR/lib.java/sdk/android/libwebrtc-prefixed.jar org.webrtc livekit.org.webrtc
+
 python3 "./src/tools_webrtc/libs/generate_licenses.py" \
   --target :default "$OUTPUT_DIR" "$OUTPUT_DIR"
 
@@ -124,7 +134,7 @@ cp "$OUTPUT_DIR/obj/webrtc.ninja" "$ARTIFACTS_DIR"
 cp "$OUTPUT_DIR/libjingle_peerconnection_so.so" "$ARTIFACTS_DIR/lib"
 cp "$OUTPUT_DIR/args.gn" "$ARTIFACTS_DIR"
 cp "$OUTPUT_DIR/LICENSE.md" "$ARTIFACTS_DIR"
-cp "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar" "$ARTIFACTS_DIR"
+cp "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc-prefixed.jar" "$ARTIFACTS_DIR/libwebrtc.jar"
 cp "src/sdk/android/AndroidManifest.xml" "$ARTIFACTS_DIR"
 
 cd src

@@ -79,7 +79,7 @@ fn main() {
     let webrtc_lib = webrtc_dir.join("lib");
 
     if !webrtc_dir.exists() {
-        webrtc_sys_build::download_webrtc().unwrap();
+        webrtc_sys_build::extract_artifact_webrtc().unwrap();
     }
 
     builder.includes(&[

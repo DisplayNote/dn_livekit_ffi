@@ -19,7 +19,12 @@ fn main() {
         return;
     }
 
-    webrtc_sys_build::download_webrtc().unwrap();
+    let webrtc_dir = webrtc_sys_build::webrtc_dir();
+
+    if !webrtc_dir.exists() {
+        webrtc_sys_build::extract_artifact_webrtc().unwrap();
+    }
+
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "android" {
         webrtc_sys_build::configure_jni_symbols().unwrap();
     }
