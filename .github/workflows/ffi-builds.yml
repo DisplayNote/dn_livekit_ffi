@@ -171,14 +171,14 @@ jobs:
       - name: Zip artifact (Unix)
         if: ${{ matrix.os != 'windows-2019' && matrix.platform != 'android'}}
         run: |
-          cp livekit-ffi/include/livekit_ffi.h target/${{ matrix.target }}/release/ 
+          cp livekit-ffi/include/livekit_ffi.h target/${{ matrix.target }}/release/
           cd target/${{ matrix.target }}/release/
           zip ${{ github.workspace }}/${{ matrix.name }}.zip ${{ matrix.dylib }} livekit_ffi.h LICENSE.md
 
       - name: Zip artifact (Unix for Android)
         if: ${{ matrix.os != 'windows-2019' && matrix.platform == 'android'}}
         run: |
-          cp livekit-ffi/include/livekit_ffi.h target/${{ matrix.target }}/release/ 
+          cp livekit-ffi/include/livekit_ffi.h target/${{ matrix.target }}/release/
           cd target/${{ matrix.target }}/release/
           zip ${{ github.workspace }}/${{ matrix.name }}.zip ${{ matrix.dylib }} ${{ matrix.jar }} livekit_ffi.h LICENSE.md
 
