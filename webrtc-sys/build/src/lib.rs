@@ -22,9 +22,11 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use flate2::read::GzDecoder;
 use fs2::FileExt;
 use regex::Regex;
 use reqwest::StatusCode;
+use tar::Archive;
 
 pub const SCRATH_PATH: &str = "livekit_webrtc";
 pub const WEBRTC_TAG: &str = "webrtc-f4967ef";
@@ -60,6 +62,16 @@ pub fn target_arch() -> String {
     .to_owned()
 }
 
+pub fn target_prefixed_arch() -> String {
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    match target_arch.as_str() {
+        "arm" => "armeabi-v7a",
+        "aarch64" => "arm64-v8a",
+        _ => &target_arch,
+    }
+    .to_owned()
+}
+
 /// The full name of the webrtc library
 /// e.g. mac-x64-release (Same name on GH releases)
 pub fn webrtc_triple() -> String {
@@ -78,6 +90,14 @@ pub fn use_debug() -> bool {
 /// The location of the custom build is defined by the user
 pub fn custom_dir() -> Option<path::PathBuf> {
     if let Ok(path) = env::var("LK_CUSTOM_WEBRTC") {
+        return Some(path::PathBuf::from(path));
+    }
+    None
+}
+
+/// The location of the artifact build is defined by the user
+pub fn artifact_dir() -> Option<path::PathBuf> {
+    if let Ok(path) = env::var("LK_ARTIFACT_WEBRTC") {
         return Some(path::PathBuf::from(path));
     }
     None
@@ -111,12 +131,22 @@ pub fn webrtc_dir() -> path::PathBuf {
         return path;
     }
 
-    prebuilt_dir()
+    return prebuilt_dir();
 }
 
 pub fn webrtc_defines() -> Vec<(String, Option<String>)> {
     // read preprocessor definitions from webrtc.ninja
     let defines_re = Regex::new(r"-D(\w+)(?:=([^\s]+))?").unwrap();
+
+    let webrtc_path = webrtc_dir();
+    if let Ok(entries) = fs::read_dir(&webrtc_path) {
+        for entry in entries.flatten() {
+            if let Ok(file_name) = entry.file_name().into_string() {
+                println!("- {}", file_name);
+            }
+        }
+    }
+
     let webrtc_gni = fs::File::open(webrtc_dir().join("webrtc.ninja")).unwrap();
 
     let mut defines_line = String::default();
@@ -154,7 +184,7 @@ pub fn configure_jni_symbols() -> Result<()> {
         .output()
         .expect("failed to run llvm-readelf");
 
-    let jni_regex = Regex::new(r"(Java_org_webrtc.*)").unwrap();
+    let jni_regex = Regex::new(r"(Java_livekit_org_webrtc.*)").unwrap();
     let content = String::from_utf8_lossy(&readelf_output.stdout);
     let jni_symbols: Vec<&str> =
         jni_regex.captures_iter(&content).map(|cap| cap.get(1).unwrap().as_str()).collect();
