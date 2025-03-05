@@ -14,11 +14,34 @@ git checkout <tag-to-generate>
 
 ## Applying Changes
 
-To apply necessary modifications, use `git rebase HEAD~N` to obtain the commits from the previous tag and resolve any conflicts that arise.
+To get new changes from upstream branch we must to:
+
+Create a new branch from `main` called `support/ffi-vx.xx.xx` in order to get the changes there.
+```sh
+git checkout -b support/ffi-v0.13.0
+```
+
+Get all new changes from upstream:
+```sh
+git fetch upstream --tags
+```
+
+Do a rebase:
+```sh
+git rebase ffi-v0.13.0
+```
+
+Then you must to solve conflicts, then, you must to compile, first webrtc and then ffi
+
+```sh
+git rebase --apply
+```
 
 ## Generating Conan Build Directory
 
-Once changes are applied, generate the Conan build directory, which will contain the necessary files for uploading to Conan.
+Once changes are applied and webrtc is built, generate the Conan build directory, which will contain the necessary files for uploading to Conan.
+
+To get the webrtc zip file generated you must to set the environ `LK_ARTIFACT_WEBRTC` where will be the path where the webrtc zip generated is located.
 
 ### Windows:
 ```sh
