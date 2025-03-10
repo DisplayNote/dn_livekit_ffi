@@ -16,7 +16,6 @@
 
 arch=""
 profile="release"
-webrtc_commit="b951613"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -68,10 +67,6 @@ then
 fi
 
 cd src
-# Change to commit needed
-git fetch origin --tags --prune
-git reset --hard "$webrtc_commit"
-gclient sync -D --reset --force --with_branch_heads --with_tags
 
 # git apply "$COMMAND_DIR/patches/add_licenses.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 git apply "$COMMAND_DIR/patches/ssl_verify_callback_with_native_handle.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
