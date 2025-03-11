@@ -131,6 +131,16 @@ pub fn webrtc_dir() -> path::PathBuf {
 pub fn webrtc_defines() -> Vec<(String, Option<String>)> {
     // read preprocessor definitions from webrtc.ninja
     let defines_re = Regex::new(r"-D(\w+)(?:=([^\s]+))?").unwrap();
+
+    let webrtc_path = webrtc_dir();
+    if let Ok(entries) = fs::read_dir(&webrtc_path) {
+        for entry in entries.flatten() {
+            if let Ok(file_name) = entry.file_name().into_string() {
+                println!("- {}", file_name);
+            }
+        }
+    }
+
     let webrtc_gni = fs::File::open(webrtc_dir().join("webrtc.ninja")).unwrap();
 
     let mut defines_line = String::default();
