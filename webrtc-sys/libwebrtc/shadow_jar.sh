@@ -44,7 +44,7 @@ sed -i "s/\$NEW_PACKAGE/$NEW_PACKAGE/g" build.gradle
 
 # Create necessary folder structure
 mkdir -p libs
-cp "../$INPUT_JAR" libs/original.jar
+cp "$INPUT_JAR" libs/original.jar
 
 echo "Running Gradle to generate shadowed JAR..."
 if ! gradle shadowJar --no-daemon; then
@@ -54,8 +54,8 @@ fi
 
 # Move the shadowed JAR to the parent directory
 if [ -f "build/libs/shadow_project-all.jar" ]; then
-    mv build/libs/shadow_project-all.jar "../$OUTPUT_JAR"
-    echo "Shadowed JAR created: ../$OUTPUT_JAR"
+    mv build/libs/shadow_project-all.jar "$OUTPUT_JAR"
+    echo "Shadowed JAR created: $OUTPUT_JAR"
 else
     echo "Error: Shadowed JAR not found."
     exit 1
