@@ -210,12 +210,12 @@ pub fn extract_artifact_webrtc() -> Result<(), Box<dyn Error>> {
     let flock = fs::File::create(dir.join(".lock"))?;
     flock.lock_exclusive()?;
 
-    if let Some(artifact_dir) = artifact_dir() {
-        let webrtc_dir = webrtc_dir();
-        if webrtc_dir.exists() {
-            return Ok(());
-        }
+    let webrtc_dir = webrtc_dir();
+    if webrtc_dir.exists() {
+        return Ok(());
+    }
 
+    if let Some(artifact_dir) = artifact_dir() {
         let tmp_path = artifact_dir.join(webrtc_triple() + ".zip");
         let tmp_path = path::Path::new(&tmp_path);
         if !tmp_path.exists() {
@@ -232,7 +232,7 @@ pub fn extract_artifact_webrtc() -> Result<(), Box<dyn Error>> {
         })?;
 
         archive.extract(parent_dir)?;
-        fs::remove_file(tmp_path)?;
+        //fs::remove_file(tmp_path)?;
 
         return Ok(());
     }
