@@ -231,7 +231,11 @@ pub fn extract_artifact_webrtc() -> Result<(), Box<dyn Error>> {
             )
         })?;
 
-        archive.extract(parent_dir)?;
+        let res = archive.extract(parent_dir);
+        if let Err(err)=res {
+            println!("Zip extracting error: {err:?}");
+            return res;
+        }
         //fs::remove_file(tmp_path)?;
 
         return Ok(());
