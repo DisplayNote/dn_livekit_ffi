@@ -161,8 +161,8 @@ pub fn webrtc_defines() -> Vec<(String, Option<String>)> {
 }
 
 pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
-    //download_webrtc()?;
-    extract_artifact_webrtc()?;
+    download_webrtc()?;
+    //extract_artifact_webrtc()?;
 
     let toolchain = android_ndk_toolchain()?;
     let toolchain_bin = toolchain.join("bin");
@@ -207,31 +207,92 @@ pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
 
 pub fn extract_artifact_webrtc() -> Result<(), Box<dyn Error>> {
     let dir = scratch::path(SCRATH_PATH);
-    let flock = fs::File::create(dir.join(".lock"))?;
-    flock.lock_exclusive()?;
+
+    let flock = fs::File::create(dir.join(".lock"));
+
+    if let Err(err) = flock {
+        println!("Error creating Lock: {err}");
+
+        return Err(Box::new(err));
+    }
+
+    let flock = flock.unwrap();
+
+    let res_flock = flock.lock_exclusive();
+
+    if let Err(err) = res_flock {
+        println!("Error creating locking - lock_exclusive: {err}");
+
+        println!("{err}");
+
+        return Err(Box::new(err));
+    }
+
+    res_flock.unwrap();
 
     let webrtc_dir = webrtc_dir();
+
     if webrtc_dir.exists() {
         return Ok(());
     }
 
     if let Some(artifact_dir) = artifact_dir() {
         let tmp_path = artifact_dir.join(webrtc_triple() + ".zip");
+
         let tmp_path = path::Path::new(&tmp_path);
+
         if !tmp_path.exists() {
-            return Err(format!("Zip file not found: {}", tmp_path.display()).into());
+            let err = format!("Zip file not found: {tmp_path:?}").into();
+
+            println!("{err}");
+
+            return Err(err);
         }
 
-        let file = fs::File::options().read(true).open(tmp_path)?;
-        let mut archive = zip::ZipArchive::new(file)?;
-        let parent_dir: &path::Path = webrtc_dir.parent().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("We cannot get the parent of: {}", webrtc_dir.display()),
-            )
-        })?;
+        let file = fs::File::options().read(true).open(tmp_path);
+
+        if let Err(err) = file {
+            let err = format!("Error opening {tmp_path:?}, {err}").into();
+
+            println!("{err}");
+
+            return Err(err);
+        }
+
+        let file = file.unwrap();
+
+        let archive = zip::ZipArchive::new(file);
+
+        if let Err(err) = archive {
+            let err = format!("Error creating zip archive, {err}").into();
+
+            println!("{err}");
+
+            return Err(err);
+        }
+
+        let mut archive = archive.unwrap();
+
+        let parent_dir = webrtc_dir.parent().ok_or_else(|| {
+            let err = format!("We cannot get the parent of: {webrtc_dir:?}");
+
+            println!("{err}");
+
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, err)
+        });
+
+        if let Err(err) = parent_dir {
+            let err = format!("Error parent dir {err}").into();
+
+            println!("{err}");
+
+            return Err(err);
+        }
+
+        let parent_dir = parent_dir.unwrap();
 
         let res = archive.extract(parent_dir);
+
         if let Err(err) = res {
             println!("Zip extract err: {err}");
 
@@ -241,7 +302,11 @@ pub fn extract_artifact_webrtc() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    return Err(format!("We cannot found the artifact dir: {:?}", artifact_dir()).into());
+    let err = format!("We cannot found the artifact dir: {:?}", artifact_dir()).into();
+
+    println!("{err}");
+
+    return Err(err);
 }
 
 pub fn download_webrtc() -> Result<(), Box<dyn Error>> {
