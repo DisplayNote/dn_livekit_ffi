@@ -76,7 +76,7 @@ call gn.bat gen %OUTPUT_DIR% --root="src" ^
 
 @echo on
 echo "Building with ninja..."
-ninja -C %OUTPUT_DIR% :default
+call ninja -C %OUTPUT_DIR% :default
 
 REM Verificar el código de salida de ninja
 if errorlevel 1 (
