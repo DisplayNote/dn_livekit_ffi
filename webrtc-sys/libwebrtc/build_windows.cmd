@@ -47,7 +47,8 @@ set vs2019_install=C:\Program Files (x86)\Microsoft Visual Studio\2019\Professio
 
 if not exist src (
   echo "Syncing source code with gclient..."
-  call gclient.bat sync -D --no-history
+  call gclient.bat sync -D --with_branch_heads --with_tags
+
 )
 
 cd src
