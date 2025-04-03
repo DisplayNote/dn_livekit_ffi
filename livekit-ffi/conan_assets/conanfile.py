@@ -3,7 +3,6 @@ from conans import ConanFile, CMake, tools
 
 class LivekitFfiConan(ConanFile):
     name = "livekit-ffi"
-    version = "0.7.2"
     license = "None"
     author = "jfjalburquerque"
     url = "None"
