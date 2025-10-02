@@ -50,6 +50,15 @@ export PATH="$(pwd)/depot_tools:$PATH"
 export OUTPUT_DIR="$(pwd)/src/out-$arch-$profile"
 export ARTIFACTS_DIR="$(pwd)/android-$arch-$profile"
 
+# --- ensure .gclient configuration for android ---
+echo "Updating existing .gclient file..."
+if ! grep -q 'target_os.*=.*\[.*"android".*"unix".*\]' .gclient; then
+  # Remove any existing target_os line
+  sed -i '/^target_os\s*=/d' .gclient
+  # Add the new target_os line
+  echo 'target_os = ["android", "unix"]' >> .gclient
+fi
+
 # --- fetch src (WebRTC) ---
 if [ ! -e "$(pwd)/src" ]; then
   echo "Setting up WebRTC Android checkout..."
