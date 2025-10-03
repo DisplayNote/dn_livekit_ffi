@@ -11,6 +11,7 @@ repository = "https://github.com/livekit/client-sdk-rust"
 default = []
 use_vaapi = []
 use_nvidia = []
+use_x264 = []
 
 [dependencies]
 cxx = "1.0"

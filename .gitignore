@@ -3,3 +3,22 @@ target
 soxr-sys/test-input.wav
 soxr-sys/test-output.wav
 .DS_Store
+
+# Exclude webrtc build artifacts
+**/.gcs_entries
+
+# Exclude webrtc build directories
+**/android-arm-release
+**/android-arm64-release
+**/android-arm-debug
+**/android-arm64-debug
+
+# Exclude vscode settings
+**/.vscode/
+
+# Exclude output directories
+**/out*
+livekit-ffi_conan/
+
+# Exclude third_party directories
+**/third_party
