@@ -90,7 +90,16 @@ pub fn use_debug() -> bool {
 /// The location of the custom build is defined by the user
 pub fn custom_dir() -> Option<path::PathBuf> {
     if let Ok(path) = env::var("LK_CUSTOM_WEBRTC") {
-        return Some(path::PathBuf::from(path));
+        let path_buf = path::PathBuf::from(path);
+        
+        // If the path is relative, resolve it relative to CARGO_MANIFEST_DIR
+        if path_buf.is_relative() {
+            if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                return Some(path::PathBuf::from(manifest_dir).join(path_buf));
+            }
+        }
+        
+        return Some(path_buf);
     }
     None
 }

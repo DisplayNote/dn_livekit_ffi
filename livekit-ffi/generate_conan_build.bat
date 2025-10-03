@@ -66,12 +66,12 @@ if not defined ANDROID_NDK_HOME (
 
 :: Build armv8 (arm64)
 cargo clean
-cargo ndk --bindgen --target aarch64-linux-android build --release --no-default-features --features "rustls-tls-webpki-roots"
+cargo ndk --target aarch64-linux-android build --release --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
 call :create_folder_structure "aarch64-linux-android"
 
 :: Build armv7 (32-bit)
 cargo clean
-cargo ndk --bindgen --target armv7-linux-androideabi build --release --no-default-features --features "rustls-tls-webpki-roots"
+cargo ndk --target armv7-linux-androideabi build --release --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/x264"
 call :create_folder_structure "armv7-linux-androideabi"
 exit /b 0
 

@@ -20,18 +20,21 @@ build_android() {
         exit 1
     fi
 
-    ln -sf "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/lib/aarch64-unknown-linux-musl/{libunwind.so,libc++abi.a}" \
-        "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/lib/"
+    # Override the incorrect library search paths from configure_android_sysroot for aarch64
+    export RUSTFLAGS="-L ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android"
 
     # Build armv8 (arm64)
     cargo clean
-    cargo ndk --bindgen --target aarch64-linux-android build --release --no-default-features --features "rustls-tls-webpki-roots"
+    cargo ndk --target aarch64-linux-android build --release --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
     create_folder_structure "aarch64-linux-android"
 
+    # Override the incorrect library search paths from configure_android_sysroot for armv7
+    # export RUSTFLAGS="-L ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi"
+
     # Build armv7 (32-bit)
-    cargo clean
-    cargo ndk --bindgen --target armv7-linux-androideabi build --release --no-default-features --features "rustls-tls-webpki-roots"
-    create_folder_structure "armv7-linux-androideabi"
+    #cargo clean
+    #cargo ndk --target armv7-linux-androideabi build --release --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
+    #create_folder_structure "armv7-linux-androideabi"
 }
 
 create_folder_structure() {
