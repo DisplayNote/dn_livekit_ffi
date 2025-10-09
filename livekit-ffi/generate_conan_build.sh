@@ -3,8 +3,8 @@
 set -e # Exit immediately on error
 
 usage() {
-    echo "Usage: $0 --platform <windows|android> --lk_custom_webrtc <path>"
-    echo "Example: $0 --platform windows --lk_custom_webrtc /path/to/webrtc"
+    echo "Usage: $0 --platform <windows|android> <path>"
+    echo "Example: $0 --platform windows /path/to/webrtc"
     exit 1
 }
 
@@ -85,15 +85,10 @@ main() {
     if [ $# -lt 4 ]; then usage; fi
 
     local platform=""
-    local lk_custom_webrtc=""
     while [[ $# -gt 0 ]]; do
         case $1 in
             --platform)
                 platform="$2"
-                shift 2
-                ;;
-            --lk_custom_webrtc)
-                lk_custom_webrtc="$2"
                 shift 2
                 ;;
             *)
@@ -106,13 +101,6 @@ main() {
     local script_path=$(dirname "$(readlink -f "$0")")
 
     cd "$script_path"
-
-    if [[ -z "$lk_custom_webrtc" ]]; then
-        echo "Error: --lk_custom_webrtc is required."
-        usage
-    fi
-
-    export LK_CUSTOM_WEBRTC="$lk_custom_webrtc"
 
     case $platform in
         windows)
