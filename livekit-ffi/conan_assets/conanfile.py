@@ -45,7 +45,7 @@ class LivekitFfiConan(ConanFile):
             self.copy("*.so", dst=dst_lib_folder, src=lib_folder, keep_path=False)
             self.copy("*.jar", dst=dst_lib_folder, src=lib_folder, keep_path=False)
 
-        if self.settings.os == "Windows":
+        elif self.settings.os == "Windows":
             lib_folder = "lib/windows"
             dst_lib_folder = "lib"
             self.copy("*.lib", dst=dst_lib_folder, src=lib_folder, keep_path=False)

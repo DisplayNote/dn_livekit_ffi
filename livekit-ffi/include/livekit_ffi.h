@@ -7,22 +7,40 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <new>
 #include <ostream>
+#include <new>
+
+constexpr static const size_t BATCH_SIZE = 32;
+
+/// # SAFTEY: The "C" callback must be threadsafe and not block
+using FfiCallbackFn = void (*)(const uint8_t *, size_t);
 
 using FfiHandleId = uint64_t;
-using FfiCallbackFn = void (*)(const uint8_t*, size_t);
 
 constexpr static const FfiHandleId INVALID_HANDLE = 0;
 
-extern "C" {
+extern "C"
+{
 
-void livekit_ffi_initialize(FfiCallbackFn cb, bool capture_logs);
+    /// # Safety
+    ///
+    /// The foreign language must only provide valid pointers
+    void livekit_ffi_initialize(FfiCallbackFn cb,
+                                bool capture_logs,
+                                const char *sdk,
+                                const char *sdk_version);
 
-FfiHandleId livekit_ffi_request(const uint8_t *data, size_t len,
-                                const uint8_t **res_ptr, size_t *res_len);
+    /// # Safety
+    ///
+    /// The foreign language must only provide valid pointers
+    FfiHandleId livekit_ffi_request(const uint8_t *data,
+                                    size_t len,
+                                    const uint8_t **res_ptr,
+                                    size_t *res_len);
 
-bool livekit_ffi_drop_handle(FfiHandleId handle_id);
+    bool livekit_ffi_drop_handle(FfiHandleId handle_id);
+
+    void livekit_ffi_dispose();
 
 } // extern "C"
 

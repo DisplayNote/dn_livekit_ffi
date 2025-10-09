@@ -178,7 +178,7 @@ echo "Running package migration..."
 
 # --- create new package structure for migrated files ---
 echo "Running package structure creation..."
-"$COMMAND_DIR/create_package_structure.sh" src
+"$COMMAND_DIR/webrtc_structure.sh" src
 
 # --- build setup ---
 mkdir -p "$ARTIFACTS_DIR/lib"
@@ -203,6 +203,8 @@ args="is_debug=$debug \
   enable_stripping=true \
   rtc_use_h264=false \
   rtc_use_pipewire=false \
+  libyuv_use_sme=false \
+  proprietary_codecs=true \
   symbol_level=0 \
   enable_iterator_debugging=false \
   use_rtti=true"
@@ -220,24 +222,39 @@ autoninja -C "$OUTPUT_DIR" :default \
   sdk/android:libwebrtc \
   sdk/android:libjingle_peerconnection_so
 
-# --- archive static lib (exclude nasm objs) ---
-ar -rc "$ARTIFACTS_DIR/lib/libwebrtc.a" \
-  $(find "$OUTPUT_DIR/obj" -name '*.o' -not -path "*/third_party/nasm/*")
-
-# --- (REMOVED) shadow packaging ---
-# Previously: ./shadow_jar.sh ... org.webrtc -> livekit.org.webrtc
-# Not needed; Java sources are already migrated pre-build.
-
 # --- licenses ---
 python3 "./src/tools_webrtc/libs/generate_licenses.py" \
   --target :default "$OUTPUT_DIR" "$OUTPUT_DIR"
 
+# --- Strip org.jni_zero symbols from libwebrtc.jar ---
+echo "Stripping org.jni_zero symbols from libwebrtc.jar..."
+temp_jar_dir="$(mktemp -d)"
+pushd "$temp_jar_dir" >/dev/null
+
+# Extract the JAR
+jar -xf "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar"
+
+# Remove org.jni_zero classes
+if [[ -d "org/jni_zero" ]]; then
+  echo "  Removing org/jni_zero directory..."
+  rm -rf "org/jni_zero"
+fi
+
+# Recreate the JAR without org.jni_zero
+jar -cf "$ARTIFACTS_DIR/libwebrtc.jar" .
+
+popd >/dev/null
+rm -rf "$temp_jar_dir"
+echo "  ✓ Stripped org.jni_zero symbols from libwebrtc.jar"
+
 # --- copy artifacts ---
 cp "$OUTPUT_DIR/obj/webrtc.ninja" "$ARTIFACTS_DIR"
 cp "$OUTPUT_DIR/libjingle_peerconnection_so.so" "$ARTIFACTS_DIR/lib"
+cp "$OUTPUT_DIR/obj/libwebrtc.a" "$ARTIFACTS_DIR/libwebrtc.a"
 cp "$OUTPUT_DIR/args.gn" "$ARTIFACTS_DIR"
-cp "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar" "$ARTIFACTS_DIR/libwebrtc.jar"
+# cp "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar" "$ARTIFACTS_DIR/libwebrtc.jar"
 cp "src/sdk/android/AndroidManifest.xml" "$ARTIFACTS_DIR"
+cp "$OUTPUT_DIR/LICENSE.md" "$ARTIFACTS_DIR"
 
 # --- headers ---
 pushd src >/dev/null

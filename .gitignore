@@ -7,11 +7,14 @@ soxr-sys/test-output.wav
 # Exclude webrtc build artifacts
 **/.gcs_entries
 
+# Exclude webrtc source directories
+**/libwebrtc/src
+
 # Exclude webrtc build directories
-**/android-arm-release
-**/android-arm64-release
-**/android-arm-debug
-**/android-arm64-debug
+**/libwebrtc/android-arm-release
+**/libwebrtc/android-arm64-release
+**/libwebrtc/android-arm-debug
+**/libwebrtc/android-arm64-debug
 
 # Exclude vscode settings
 **/.vscode/
