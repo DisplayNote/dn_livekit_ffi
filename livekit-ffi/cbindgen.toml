@@ -13,3 +13,7 @@ exclude = ["android", "JNI_OnLoad", "JavaVM", "jint", "JNI_VERSION_1_6"]
 [parse.expand]
 all_features = false
 default_features = false
+
+# Explicitly exclude specific symbols from export
+[export]
+exclude = ["JNI_OnLoad"]
