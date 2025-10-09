@@ -3,8 +3,8 @@
 set -e # Exit immediately on error
 
 usage() {
-    echo "Usage: $0 --platform <windows|android> --lk_custom_webrtc <path>"
-    echo "Example: $0 --platform windows --lk_custom_webrtc /path/to/webrtc"
+    echo "Usage: $0 --platform <windows|android> <path>"
+    echo "Example: $0 --platform windows /path/to/webrtc"
     exit 1
 }
 
@@ -20,21 +20,24 @@ build_android() {
         exit 1
     fi
 
-    # Override the incorrect library search paths from configure_android_sysroot for aarch64
-    export RUSTFLAGS="-L ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android"
+    # Generate the C header file using cbindgen
+    cbindgen --config cbindgen.toml --crate livekit-ffi --output include/livekit_ffi.h
 
-    # Build armv8 (arm64)
+    # Path to the custom WebRTC build for Android arm64
+    export LK_CUSTOM_WEBRTC="$(pwd)/../webrtc-sys/libwebrtc/android-arm64-release"
+
+    # Build armv8 (arm64) - aligned with Qt's arm64-v8a
     cargo clean
-    cargo ndk --target aarch64-linux-android build --release --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
+    cargo ndk --target aarch64-linux-android build --release --platform 21 --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
     create_folder_structure "aarch64-linux-android"
 
-    # Override the incorrect library search paths from configure_android_sysroot for armv7
-    # export RUSTFLAGS="-L ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi"
+    # Path to the custom WebRTC build for Android arm
+    export LK_CUSTOM_WEBRTC="$(pwd)/../webrtc-sys/libwebrtc/android-arm-release"
 
     # Build armv7 (32-bit)
-    #cargo clean
-    #cargo ndk --target armv7-linux-androideabi build --release --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
-    #create_folder_structure "armv7-linux-androideabi"
+    cargo clean
+    cargo ndk --target armv7-linux-androideabi build --release --platform 21 --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
+    create_folder_structure "armv7-linux-androideabi"
 }
 
 create_folder_structure() {
@@ -82,15 +85,10 @@ main() {
     if [ $# -lt 4 ]; then usage; fi
 
     local platform=""
-    local lk_custom_webrtc=""
     while [[ $# -gt 0 ]]; do
         case $1 in
             --platform)
                 platform="$2"
-                shift 2
-                ;;
-            --lk_custom_webrtc)
-                lk_custom_webrtc="$2"
                 shift 2
                 ;;
             *)
@@ -103,13 +101,6 @@ main() {
     local script_path=$(dirname "$(readlink -f "$0")")
 
     cd "$script_path"
-
-    if [[ -z "$lk_custom_webrtc" ]]; then
-        echo "Error: --lk_custom_webrtc is required."
-        usage
-    fi
-
-    export LK_CUSTOM_WEBRTC="$lk_custom_webrtc"
 
     case $platform in
         windows)

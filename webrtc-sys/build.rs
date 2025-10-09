@@ -202,7 +202,8 @@ fn main() {
                             .file("src/x264/x264_video_encoder.cpp")
                             .include(&x264_include);
 
-                        let x264_lib_abs = x264_lib.canonicalize().unwrap_or_else(|_| x264_lib.clone());
+                        let x264_lib_abs =
+                            x264_lib.canonicalize().unwrap_or_else(|_| x264_lib.clone());
                         println!("cargo:rustc-link-search=native={}", x264_lib_abs.display());
                         println!("cargo:rustc-link-lib=static=x264");
                     }
@@ -210,7 +211,7 @@ fn main() {
                 _ => {}
             }
 
-            builder.flag("-Wno-changes-meaning").flag("-std=c++2a");
+            builder.flag("-Wno-changes-meaning").flag("-std=c++20");
         }
         "macos" => {
             println!("cargo:rustc-link-lib=framework=Foundation");
@@ -290,8 +291,9 @@ fn main() {
                 .file("src/android.cpp")
                 .file("src/android/video_encoder_factory.cpp")
                 .file("src/android/video_decoder_factory.cpp")
-                .flag("-std=c++2a")
-                .cpp_link_stdlib("c++_static");
+                .flag("-std=c++20")
+                // Changed from c++_static to c++_shared for Qt compatibility
+                .cpp_link_stdlib("c++_shared");
         }
         _ => {
             panic!("Unsupported target, {}", target_os);
@@ -391,7 +393,7 @@ fn setup_x264() -> (PathBuf, PathBuf) {
         // Check target architecture to determine the correct library
         let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
         let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-        
+
         let x264_static_lib = match (target_os.as_str(), target_arch.as_str()) {
             ("android", "aarch64") => x264_lib.join("libx264-android-aarch64.a"),
             ("android", "arm") => x264_lib.join("libx264-android-armv7.a"),
@@ -400,18 +402,26 @@ fn setup_x264() -> (PathBuf, PathBuf) {
         };
 
         if !x264_static_lib.exists() {
-            println!("cargo:warning=x264 library {:?} not found, building x264 for target {}...", 
-                     x264_static_lib, format!("{}-{}", target_os, target_arch));
-            
+            println!(
+                "cargo:warning=x264 library {:?} not found, building x264 for target {}...",
+                x264_static_lib,
+                format!("{}-{}", target_os, target_arch)
+            );
+
             // Configure for cross-compilation if building for Android
             if target_os == "android" {
-                configure_and_build_x264_android(&x264_dir, &target_arch, &x264_lib, &x264_static_lib);
+                configure_and_build_x264_android(
+                    &x264_dir,
+                    &target_arch,
+                    &x264_lib,
+                    &x264_static_lib,
+                );
             } else {
                 // Build x264 from source for other targets
                 let mut build_cmd = std::process::Command::new("make");
                 build_cmd.current_dir(&x264_dir);
                 build_cmd.arg("-j").arg(env::var("NUM_JOBS").unwrap_or_else(|_| "4".to_string()));
-                
+
                 let output = build_cmd.output().expect("Failed to build x264");
 
                 if !output.status.success() {
@@ -420,44 +430,50 @@ fn setup_x264() -> (PathBuf, PathBuf) {
             }
         }
 
-        println!("cargo:warning=Using x264 submodule headers and library for {}-{}", target_os, target_arch);
+        println!(
+            "cargo:warning=Using x264 submodule headers and library for {}-{}",
+            target_os, target_arch
+        );
         (x264_include, x264_lib)
     } else {
         panic!("x264 submodule not found at third_party/x264. Please ensure the submodule is initialized and checked out.");
     }
 }
 
-fn configure_and_build_x264_android(x264_dir: &Path, target_arch: &str, x264_lib: &PathBuf, x264_static_lib: &PathBuf) {
-    let ndk_home = env::var("ANDROID_NDK_HOME").expect("ANDROID_NDK_HOME must be set for Android builds");
+fn configure_and_build_x264_android(
+    x264_dir: &Path,
+    target_arch: &str,
+    x264_lib: &PathBuf,
+    x264_static_lib: &PathBuf,
+) {
+    let ndk_home =
+        env::var("ANDROID_NDK_HOME").expect("ANDROID_NDK_HOME must be set for Android builds");
     let toolchain_bin = format!("{}/toolchains/llvm/prebuilt/linux-x86_64/bin", ndk_home);
-    
+
     let (host_triple, cc_name, ar_name, cc_env_var, ar_env_var) = match target_arch {
         "aarch64" => (
             "aarch64-linux-android",
             "aarch64-linux-android28-clang",
             "llvm-ar",
             "CC_aarch64_linux_android",
-            "AR_aarch64_linux_android"
+            "AR_aarch64_linux_android",
         ),
         "arm" => (
             "arm-linux-androideabi",
             "armv7a-linux-androideabi28-clang",
             "llvm-ar",
             "CC_armv7_linux_androideabi",
-            "AR_armv7_linux_androideabi"
+            "AR_armv7_linux_androideabi",
         ),
         _ => panic!("Unsupported Android architecture: {}", target_arch),
     };
 
     let cc = env::var(cc_env_var).unwrap_or_else(|_| cc_name.to_string());
     let ar = env::var(ar_env_var).unwrap_or_else(|_| ar_name.to_string());
-    
+
     // Clean any previous build artifacts
-    let _ = std::process::Command::new("make")
-        .current_dir(&x264_dir)
-        .arg("clean")
-        .output();
-    
+    let _ = std::process::Command::new("make").current_dir(&x264_dir).arg("clean").output();
+
     // Configure x264 for Android cross-compilation
     let mut configure_cmd = std::process::Command::new("./configure");
     configure_cmd
@@ -465,8 +481,8 @@ fn configure_and_build_x264_android(x264_dir: &Path, target_arch: &str, x264_lib
         .arg(format!("--host={}", host_triple))
         .arg("--enable-static")
         .arg("--disable-cli")
-        .arg("--disable-asm")  // Disable assembly optimizations to avoid toolchain issues
-        .arg("--enable-pic")   // Enable position independent code
+        .arg("--disable-asm") // Disable assembly optimizations to avoid toolchain issues
+        .arg("--enable-pic") // Enable position independent code
         .env("CC", &cc)
         .env("AR", &ar)
         .env("PATH", format!("{}:{}", toolchain_bin, env::var("PATH").unwrap_or_default()));
@@ -474,43 +490,59 @@ fn configure_and_build_x264_android(x264_dir: &Path, target_arch: &str, x264_lib
     // Add additional flags for ARMv7
     if target_arch == "arm" {
         configure_cmd
-            .arg("--disable-thread")  // Disable threading for better compatibility on older ARM devices
+            .arg("--disable-thread") // Disable threading for better compatibility on older ARM devices
             .env("CFLAGS", "-march=armv7-a -mfloat-abi=softfp -mfpu=neon");
     }
 
-    let configure_output = configure_cmd
-        .output()
-        .expect("Failed to configure x264 for Android");
+    let configure_output = configure_cmd.output().expect("Failed to configure x264 for Android");
 
     if !configure_output.status.success() {
-        println!("cargo:warning=x264 configure stdout: {}", String::from_utf8_lossy(&configure_output.stdout));
-        println!("cargo:warning=x264 configure stderr: {}", String::from_utf8_lossy(&configure_output.stderr));
-        panic!("Failed to configure x264 for Android {}: {}", target_arch, String::from_utf8_lossy(&configure_output.stderr));
+        println!(
+            "cargo:warning=x264 configure stdout: {}",
+            String::from_utf8_lossy(&configure_output.stdout)
+        );
+        println!(
+            "cargo:warning=x264 configure stderr: {}",
+            String::from_utf8_lossy(&configure_output.stderr)
+        );
+        panic!(
+            "Failed to configure x264 for Android {}: {}",
+            target_arch,
+            String::from_utf8_lossy(&configure_output.stderr)
+        );
     }
 
     // Build x264
     let mut build_cmd = std::process::Command::new("make");
     build_cmd
         .current_dir(&x264_dir)
-        .arg("-j").arg(env::var("NUM_JOBS").unwrap_or_else(|_| "4".to_string()))
+        .arg("-j")
+        .arg(env::var("NUM_JOBS").unwrap_or_else(|_| "4".to_string()))
         .env("CC", &cc)
         .env("AR", &ar)
         .env("PATH", format!("{}:{}", toolchain_bin, env::var("PATH").unwrap_or_default()));
-    
+
     let output = build_cmd.output().expect("Failed to build x264");
 
     if !output.status.success() {
         println!("cargo:warning=x264 build stdout: {}", String::from_utf8_lossy(&output.stdout));
         println!("cargo:warning=x264 build stderr: {}", String::from_utf8_lossy(&output.stderr));
-        panic!("Failed to build x264 for Android {}: {}", target_arch, String::from_utf8_lossy(&output.stderr));
+        panic!(
+            "Failed to build x264 for Android {}: {}",
+            target_arch,
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
-    
+
     // Copy the built library to the target-specific name
     let source_lib = x264_lib.join("libx264.a");
     if source_lib.exists() {
         std::fs::copy(&source_lib, &x264_static_lib)
             .expect("Failed to copy x264 library to target-specific name");
-        println!("cargo:warning=Successfully built and copied x264 library for Android {}", target_arch);
+        println!(
+            "cargo:warning=Successfully built and copied x264 library for Android {}",
+            target_arch
+        );
     } else {
         panic!("x264 library was not created at expected location: {:?}", source_lib);
     }
