@@ -11,18 +11,47 @@ if "%~1"=="" (
 
 :: Manejo de argumentos
 set "platform="
+set "lk_custom_webrtc="
+
+:parse_args
+if "%~1"=="" goto :after_parse
 if /i "%~1"=="--platform" (
     if "%~2"=="" (
         echo Error: No platform specified.
         goto :usage
     )
     set "platform=%~2"
+    shift
+    shift
+    goto :parse_args
+) else if /i "%~1"=="--lk_custom_webrtc" (
+    if "%~2"=="" (
+        echo Error: No lk_custom_webrtc path specified.
+        goto :usage
+    )
+    set "lk_custom_webrtc=%~2"
+    shift
+    shift
+    goto :parse_args
 ) else (
     echo Error: Invalid argument %~1
     goto :usage
 )
 
+:after_parse
+
+if not defined platform (
+    echo Error: --platform is required.
+    goto :usage
+)
+if not defined lk_custom_webrtc (
+    echo Error: --lk_custom_webrtc is required.
+    goto :usage
+)
+
 echo Selected platform: %platform%
+set "LK_CUSTOM_WEBRTC=%lk_custom_webrtc%"
+echo LK_CUSTOM_WEBRTC: %LK_CUSTOM_WEBRTC%
 
 :: Guardar el directorio actual
 set "initial_path=%CD%"
@@ -44,8 +73,8 @@ exit /b 0
 
 :: Función de ayuda
 :usage
-echo Usage: %~nx0 --platform ^<windows^|android^>
-echo Example: %~nx0 --platform windows
+echo Usage: %~nx0 --platform ^<windows^|android^> --lk_custom_webrtc ^<path^>
+echo Example: %~nx0 --platform windows --lk_custom_webrtc C:\path\to\webrtc
 exit /b 1
 
 :: Función para compilar en Windows
