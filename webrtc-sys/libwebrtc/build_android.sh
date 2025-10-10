@@ -218,7 +218,7 @@ else
   # Release build settings
   args="${args} \
     symbol_level=0 \
-    enable_stripping=true
+    enable_stripping=true"
 fi
 
 # --- GN gen ---
