@@ -32,7 +32,7 @@ build_android() {
     fi
 
     # Generate the C header file using cbindgen
-    # cbindgen --config cbindgen.toml --crate livekit-ffi --output include/livekit_ffi.h
+    cbindgen --config cbindgen.toml --crate livekit-ffi --output include/livekit_ffi.h
 
     # Determine cargo build flags based on profile
     local build_flags=""
