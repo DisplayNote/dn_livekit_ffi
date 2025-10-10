@@ -211,9 +211,10 @@ if [ "$debug" = "true" ]; then
   # Debug build settings
   args="${args} \
     symbol_level=2 \
-    enable_iterator_debugging=true \
-    is_asan=true \
-    is_lsan=true"
+    enable_iterator_debugging=true"
+    # These options force min_supported_sdk_version = 27 and fails due to default 21
+    # is_asan=true \
+    # is_lsan=true"
 else
   # Release build settings
   args="${args} \
@@ -240,9 +241,9 @@ python3 "./src/tools_webrtc/libs/generate_licenses.py" \
 # --- copy artifacts ---
 cp "$OUTPUT_DIR/obj/webrtc.ninja" "$ARTIFACTS_DIR"
 cp "$OUTPUT_DIR/libjingle_peerconnection_so.so" "$ARTIFACTS_DIR/lib"
-cp "$OUTPUT_DIR/obj/libwebrtc.a" "$ARTIFACTS_DIR/libwebrtc.a"
+cp "$OUTPUT_DIR/obj/libwebrtc.a" "$ARTIFACTS_DIR/lib"
 cp "$OUTPUT_DIR/args.gn" "$ARTIFACTS_DIR"
-cp "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar" "$ARTIFACTS_DIR/libwebrtc.jar"
+cp "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar" "$ARTIFACTS_DIR"
 cp "src/sdk/android/AndroidManifest.xml" "$ARTIFACTS_DIR"
 cp "$OUTPUT_DIR/LICENSE.md" "$ARTIFACTS_DIR"
 
