@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use livekit_protocol::AudioTrackFeature;
+
 pub use crate::{
     id::*,
-    participant::{ConnectionQuality, LocalParticipant, Participant, RemoteParticipant},
+    participant::{
+        ConnectionQuality, DisconnectReason, LocalParticipant, Participant, PerformRpcData,
+        RemoteParticipant, RpcError, RpcErrorCode, RpcInvocationData,
+    },
     publication::{LocalTrackPublication, RemoteTrackPublication, TrackPublication},
     track::{
         AudioTrack, LocalAudioTrack, LocalTrack, LocalVideoTrack, RemoteAudioTrack, RemoteTrack,
         RemoteVideoTrack, StreamState, Track, TrackDimension, TrackKind, TrackSource, VideoTrack,
     },
     ConnectionState, DataPacket, DataPacketKind, Room, RoomError, RoomEvent, RoomOptions,
-    RoomResult, SipDTMF, Transcription, TranscriptionSegment,
+    RoomResult, RoomSdkOptions, SipDTMF, Transcription, TranscriptionSegment,
 };

@@ -43,12 +43,10 @@ set GYP_GENERATORS=ninja,msvs-ninja
 set GYP_MSVS_VERSION=2022
 set OUTPUT_DIR=src\out-!arch!-!profile!
 set ARTIFACTS_DIR=%cd%\win-!arch!-!profile!
-set vs2022_install=C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional
+set vs2019_install=C:\Program Files\Microsoft Visual Studio\2022\Enterprise
 
 if not exist src (
-  echo "Syncing source code with gclient..."
-  call gclient.bat sync -D --no-history
-
+  call gclient.bat sync -D --with_branch_heads --with_tags
 )
 
 cd src
@@ -58,6 +56,7 @@ call git apply "%COMMAND_DIR%/patches/add_licenses.patch" -v --ignore-space-chan
 call git apply "%COMMAND_DIR%/patches/add_deps.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 call git apply "%COMMAND_DIR%/patches/windows_silence_warnings.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 call git apply "%COMMAND_DIR%/patches/ssl_verify_callback_with_native_handle.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
+
 cd ..
 
 @echo on
@@ -101,8 +100,4 @@ copy "%OUTPUT_DIR%\LICENSE.md" "%ARTIFACTS_DIR%"
 @echo on
 echo "Copying headers..."
 xcopy src\*.h "%ARTIFACTS_DIR%\include" /C /S /I /F /H
-
-@echo on
-echo "Listing artifacts directory contents..."
-dir "%ARTIFACTS_DIR%"
-
+xcopy src\*.inc "%ARTIFACTS_DIR%\include" /C /S /I /F /H

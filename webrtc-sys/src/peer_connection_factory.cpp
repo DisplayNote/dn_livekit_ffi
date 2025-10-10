@@ -21,20 +21,24 @@
 
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
+#include "api/audio/builtin_audio_processing_builder.h"
+#include "api/environment/environment_factory.h"
 #include "api/peer_connection_interface.h"
+#include "api/transport/field_trial_based_config.h"
 #include "api/rtc_error.h"
+#include "api/enable_media.h"
 #include "api/rtc_event_log/rtc_event_log_factory.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
 #include "api/video_codecs/builtin_video_encoder_factory.h"
 #include "livekit/audio_device.h"
+#include "livekit/audio_track.h"
 #include "livekit/peer_connection.h"
 #include "livekit/rtc_error.h"
 #include "livekit/rtp_parameters.h"
 #include "livekit/video_decoder_factory.h"
 #include "livekit/video_encoder_factory.h"
 #include "livekit/webrtc.h"
-#include "media/engine/webrtc_media_engine.h"
 #include "rtc_base/thread.h"
 #include "webrtc-sys/src/peer_connection.rs.h"
 #include "webrtc-sys/src/peer_connection_factory.rs.h"
@@ -54,34 +58,31 @@ PeerConnectionFactory::PeerConnectionFactory(
   dependencies.signaling_thread = rtc_runtime_->signaling_thread();
   dependencies.socket_factory = rtc_runtime_->network_thread()->socketserver();
   dependencies.task_queue_factory = webrtc::CreateDefaultTaskQueueFactory();
-  dependencies.event_log_factory = std::make_unique<webrtc::RtcEventLogFactory>(
-      dependencies.task_queue_factory.get());
-  dependencies.call_factory = webrtc::CreateCallFactory();
+  dependencies.event_log_factory = std::make_unique<webrtc::RtcEventLogFactory>();
   dependencies.trials = std::make_unique<webrtc::FieldTrialBasedConfig>();
 
-  cricket::MediaEngineDependencies media_deps;
-  media_deps.task_queue_factory = dependencies.task_queue_factory.get();
-
   audio_device_ = rtc_runtime_->worker_thread()->BlockingCall([&] {
-    return rtc::make_ref_counted<livekit::AudioDevice>(
-        media_deps.task_queue_factory);
+    return webrtc::make_ref_counted<livekit::AudioDevice>(
+        dependencies.task_queue_factory.get());
   });
 
-  media_deps.adm = audio_device_;
+  dependencies.adm = audio_device_;
 
-  media_deps.video_encoder_factory =
+  dependencies.video_encoder_factory =
       std::move(std::make_unique<livekit::VideoEncoderFactory>());
-  media_deps.video_decoder_factory =
+  dependencies.video_decoder_factory =
       std::move(std::make_unique<livekit::VideoDecoderFactory>());
-  media_deps.audio_encoder_factory = webrtc::CreateBuiltinAudioEncoderFactory();
-  media_deps.audio_decoder_factory = webrtc::CreateBuiltinAudioDecoderFactory();
-  media_deps.audio_processing = webrtc::AudioProcessingBuilder().Create();
-  media_deps.trials = dependencies.trials.get();
+  dependencies.audio_encoder_factory = webrtc::CreateBuiltinAudioEncoderFactory();
+  dependencies.audio_decoder_factory = webrtc::CreateBuiltinAudioDecoderFactory();
+  dependencies.audio_processing = webrtc::BuiltinAudioProcessingBuilder()
+                                      .Build(webrtc::CreateEnvironment());
 
-  dependencies.media_engine = cricket::CreateMediaEngine(std::move(media_deps));
-
+  webrtc::EnableMedia(dependencies);
   peer_factory_ =
       webrtc::CreateModularPeerConnectionFactory(std::move(dependencies));
+
+
+  task_queue_factory_ = dependencies.task_queue_factory.get();
 
   if (peer_factory_.get() == nullptr) {
     RTC_LOG_ERR(LS_ERROR) << "Failed to create PeerConnectionFactory";
@@ -126,16 +127,17 @@ std::shared_ptr<AudioTrack> PeerConnectionFactory::create_audio_track(
       rtc_runtime_->get_or_create_media_stream_track(
           peer_factory_->CreateAudioTrack(label.c_str(), source->get().get())));
 }
+
 RtpCapabilities PeerConnectionFactory::rtp_sender_capabilities(
     MediaType type) const {
   return to_rust_rtp_capabilities(peer_factory_->GetRtpSenderCapabilities(
-      static_cast<cricket::MediaType>(type)));
+      static_cast<webrtc::MediaType>(type)));
 }
 
 RtpCapabilities PeerConnectionFactory::rtp_receiver_capabilities(
     MediaType type) const {
   return to_rust_rtp_capabilities(peer_factory_->GetRtpReceiverCapabilities(
-      static_cast<cricket::MediaType>(type)));
+      static_cast<webrtc::MediaType>(type)));
 }
 
 std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory() {

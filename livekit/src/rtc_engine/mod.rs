@@ -25,9 +25,8 @@ use tokio::sync::{
     RwLockReadGuard as AsyncRwLockReadGuard,
 };
 
-pub use self::rtc_session::SessionStats;
+pub use self::rtc_session::{SessionStats, INITIAL_BUFFERED_AMOUNT_LOW_THRESHOLD};
 use crate::prelude::ParticipantIdentity;
-use crate::TranscriptionSegment;
 use crate::{
     id::ParticipantSid,
     options::TrackPublishOptions,
@@ -39,6 +38,7 @@ use crate::{
     },
     DataPacketKind,
 };
+use crate::{ChatMessage, TranscriptionSegment};
 
 pub mod lk_runtime;
 mod peer_transport;
@@ -99,6 +99,10 @@ pub enum EngineEvent {
         topic: Option<String>,
         kind: DataPacketKind,
     },
+    ChatMessage {
+        participant_identity: ParticipantIdentity,
+        message: ChatMessage,
+    },
     Transcription {
         participant_identity: ParticipantIdentity,
         track_sid: String,
@@ -109,6 +113,22 @@ pub enum EngineEvent {
         code: u32,
         digit: Option<String>,
     },
+    RpcRequest {
+        caller_identity: Option<ParticipantIdentity>,
+        request_id: String,
+        method: String,
+        payload: String,
+        response_timeout: Duration,
+        version: u32,
+    },
+    RpcResponse {
+        request_id: String,
+        payload: Option<String>,
+        error: Option<proto::RpcError>,
+    },
+    RpcAck {
+        request_id: String,
+    },
     SpeakersChanged {
         speakers: Vec<proto::SpeakerInfo>,
     },
@@ -117,6 +137,9 @@ pub enum EngineEvent {
     },
     RoomUpdate {
         room: proto::Room,
+    },
+    RoomMoved {
+        moved: proto::RoomMovedResponse,
     },
     /// The following events are used to notify the room about the reconnection state
     /// Since the room needs to also sync state in a good timing with the server.
@@ -136,6 +159,29 @@ pub enum EngineEvent {
     Disconnected {
         reason: DisconnectReason,
     },
+    LocalTrackSubscribed {
+        track_sid: String,
+    },
+    DataStreamHeader {
+        header: proto::data_stream::Header,
+        participant_identity: String,
+    },
+    DataStreamChunk {
+        chunk: proto::data_stream::Chunk,
+        participant_identity: String,
+    },
+    DataStreamTrailer {
+        trailer: proto::data_stream::Trailer,
+        participant_identity: String,
+    },
+    DataChannelBufferedAmountLowThresholdChanged {
+        kind: DataPacketKind,
+        threshold: u64,
+    },
+    RefreshToken {
+        url: String,
+        token: String,
+    },
 }
 
 /// Represents a running RtcSession with the ability to close the session
@@ -145,6 +191,7 @@ struct EngineHandle {
     session: Arc<RtcSession>,
     closed: bool,
     reconnecting: bool,
+    can_reconnect: bool,
 
     // If full_reconnect is true, the next attempt will not try to resume
     // and will instead do a full reconnect
@@ -197,15 +244,15 @@ impl RtcEngine {
 
     pub async fn publish_data(
         &self,
-        data: &proto::DataPacket,
+        data: proto::DataPacket,
         kind: DataPacketKind,
+        is_raw_packet: bool,
     ) -> EngineResult<()> {
         let (session, _r_lock) = {
             let (handle, _r_lock) = self.inner.wait_reconnection().await?;
             (handle.session.clone(), _r_lock)
         };
-
-        session.publish_data(data, kind).await
+        session.publish_data(data, kind, is_raw_packet).await
     }
 
     pub async fn simulate_scenario(&self, scenario: SimulateScenario) -> EngineResult<()> {
@@ -273,6 +320,11 @@ impl RtcEngine {
                                                 // on fail
     }
 
+    pub async fn get_response(&self, request_id: u32) -> proto::RequestResponse {
+        let session = self.inner.running_handle.read().session.clone();
+        session.get_response(request_id).await
+    }
+
     pub async fn get_stats(&self) -> EngineResult<SessionStats> {
         let session = self.inner.running_handle.read().session.clone();
         session.get_stats().await
@@ -310,6 +362,7 @@ impl EngineInner {
                             session: Arc::new(session),
                             closed: false,
                             reconnecting: false,
+                            can_reconnect: true,
                             full_reconnect: false,
                             engine_task: None,
                         }),
@@ -393,19 +446,35 @@ impl EngineInner {
 
     async fn on_session_event(self: &Arc<Self>, event: SessionEvent) -> EngineResult<()> {
         match event {
-            SessionEvent::Close { source, reason, can_reconnect, retry_now, full_reconnect } => {
-                log::debug!("received session close: {}, {:?}", source, reason);
-                if can_reconnect {
-                    self.reconnection_needed(retry_now, full_reconnect);
-                } else {
-                    // Spawning a new task because the close function wait for the engine_task to
-                    // finish. (So it doesn't make sense to await it here)
-                    livekit_runtime::spawn({
-                        let inner = self.clone();
-                        async move {
-                            inner.close(reason).await;
-                        }
-                    });
+            SessionEvent::Close { source, reason, action, retry_now } => {
+                match action {
+                    proto::leave_request::Action::Resume
+                    | proto::leave_request::Action::Reconnect => {
+                        log::warn!(
+                            "received session close: {:?} {:?} {:?}",
+                            source,
+                            reason,
+                            action
+                        );
+                        self.reconnection_needed(
+                            retry_now,
+                            action == proto::leave_request::Action::Reconnect,
+                        );
+                    }
+                    proto::leave_request::Action::Disconnect => {
+                        // Disallow reconnection to avoid races
+                        let mut running_handle = self.running_handle.write();
+                        running_handle.can_reconnect = false;
+
+                        // Spawning a new task because the close function wait for the engine_task to
+                        // finish. (So it doesn't make sense to await it here)
+                        livekit_runtime::spawn({
+                            let inner = self.clone();
+                            async move {
+                                inner.close(reason).await;
+                            }
+                        });
+                    }
                 }
             }
             SessionEvent::Data { participant_sid, participant_identity, payload, topic, kind } => {
@@ -417,6 +486,10 @@ impl EngineInner {
                     kind,
                 });
             }
+            SessionEvent::ChatMessage { participant_identity, message } => {
+                let _ =
+                    self.engine_tx.send(EngineEvent::ChatMessage { participant_identity, message });
+            }
             SessionEvent::SipDTMF { participant_identity, code, digit } => {
                 let _ =
                     self.engine_tx.send(EngineEvent::SipDTMF { participant_identity, code, digit });
@@ -427,6 +500,34 @@ impl EngineInner {
                     track_sid,
                     segments,
                 });
+            }
+            SessionEvent::SipDTMF { participant_identity, code, digit } => {
+                let _ =
+                    self.engine_tx.send(EngineEvent::SipDTMF { participant_identity, code, digit });
+            }
+            SessionEvent::RpcRequest {
+                caller_identity,
+                request_id,
+                method,
+                payload,
+                response_timeout,
+                version,
+            } => {
+                let _ = self.engine_tx.send(EngineEvent::RpcRequest {
+                    caller_identity,
+                    request_id,
+                    method,
+                    payload,
+                    response_timeout,
+                    version,
+                });
+            }
+            SessionEvent::RpcResponse { request_id, payload, error } => {
+                let _ =
+                    self.engine_tx.send(EngineEvent::RpcResponse { request_id, payload, error });
+            }
+            SessionEvent::RpcAck { request_id } => {
+                let _ = self.engine_tx.send(EngineEvent::RpcAck { request_id });
             }
             SessionEvent::MediaTrack { track, stream, transceiver } => {
                 let _ = self.engine_tx.send(EngineEvent::MediaTrack { track, stream, transceiver });
@@ -442,6 +543,35 @@ impl EngineInner {
             }
             SessionEvent::RoomUpdate { room } => {
                 let _ = self.engine_tx.send(EngineEvent::RoomUpdate { room });
+            }
+            SessionEvent::RoomMoved { moved } => {
+                let _ = self.engine_tx.send(EngineEvent::RoomMoved { moved });
+            }
+            SessionEvent::LocalTrackSubscribed { track_sid } => {
+                let _ = self.engine_tx.send(EngineEvent::LocalTrackSubscribed { track_sid });
+            }
+            SessionEvent::DataStreamHeader { header, participant_identity } => {
+                let _ = self
+                    .engine_tx
+                    .send(EngineEvent::DataStreamHeader { header, participant_identity });
+            }
+            SessionEvent::DataStreamChunk { chunk, participant_identity } => {
+                let _ = self
+                    .engine_tx
+                    .send(EngineEvent::DataStreamChunk { chunk, participant_identity });
+            }
+            SessionEvent::DataStreamTrailer { trailer, participant_identity } => {
+                let _ = self
+                    .engine_tx
+                    .send(EngineEvent::DataStreamTrailer { trailer, participant_identity });
+            }
+            SessionEvent::DataChannelBufferedAmountLowThresholdChanged { kind, threshold } => {
+                let _ = self.engine_tx.send(
+                    EngineEvent::DataChannelBufferedAmountLowThresholdChanged { kind, threshold },
+                );
+            }
+            SessionEvent::RefreshToken { url, token } => {
+                let _ = self.engine_tx.send(EngineEvent::RefreshToken { url, token });
             }
         }
         Ok(())
@@ -488,6 +618,11 @@ impl EngineInner {
     /// Ask for a full reconnect if `full_reconnect` is true
     fn reconnection_needed(self: &Arc<Self>, retry_now: bool, full_reconnect: bool) {
         let mut running_handle = self.running_handle.write();
+
+        if !running_handle.can_reconnect {
+            return;
+        }
+
         if running_handle.reconnecting {
             // If we're already reconnecting just update the interval to restart a new attempt
             // ASAP
@@ -594,7 +729,7 @@ impl EngineInner {
                 log::error!("resuming connection... attempt: {}", i);
                 if let Err(err) = self.try_resume_connection().await {
                     log::error!("resuming connection failed: {}", err);
-                    if let EngineError::Signal(_) = err {
+                    if !matches!(err, EngineError::Signal(_)) {
                         let mut running_handle = self.running_handle.write();
                         running_handle.full_reconnect = true;
                     }

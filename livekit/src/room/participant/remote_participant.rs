@@ -24,7 +24,7 @@ use livekit_protocol as proto;
 use livekit_runtime::timeout;
 use parking_lot::Mutex;
 
-use super::{ConnectionQuality, ParticipantInner, TrackKind};
+use super::{ConnectionQuality, ParticipantInner, ParticipantKind, TrackKind};
 use crate::{prelude::*, rtc_engine::RtcEngine, track::TrackError};
 
 const ADD_TRACK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -70,6 +70,7 @@ impl Debug for RemoteParticipant {
 impl RemoteParticipant {
     pub(crate) fn new(
         rtc_engine: Arc<RtcEngine>,
+        kind: ParticipantKind,
         sid: ParticipantSid,
         identity: ParticipantIdentity,
         name: String,
@@ -78,7 +79,7 @@ impl RemoteParticipant {
         auto_subscribe: bool,
     ) -> Self {
         Self {
-            inner: super::new_inner(rtc_engine, sid, identity, name, metadata, attributes),
+            inner: super::new_inner(rtc_engine, sid, identity, name, metadata, attributes, kind),
             remote: Arc::new(RemoteInfo { events: Default::default(), auto_subscribe }),
         }
     }
@@ -383,7 +384,32 @@ impl RemoteParticipant {
                         .await
                 });
             }
-        })
+        });
+
+        publication.on_video_dimensions_changed({
+            let rtc_engine = self.inner.rtc_engine.clone();
+            move |publication, dimension| {
+                let rtc_engine = rtc_engine.clone();
+                livekit_runtime::spawn(async move {
+                    let tsid: String = publication.sid().into();
+                    let TrackDimension(width, height) = dimension;
+                    let enabled = publication.is_enabled();
+                    let update_track_settings = proto::UpdateTrackSettings {
+                        track_sids: vec![tsid.clone()],
+                        disabled: !enabled,
+                        width,
+                        height,
+                        ..Default::default()
+                    };
+
+                    rtc_engine
+                        .send_request(proto::signal_request::Message::TrackSetting(
+                            update_track_settings,
+                        ))
+                        .await
+                });
+            }
+        });
     }
 
     pub(crate) fn remove_publication(&self, sid: &TrackSid) -> Option<TrackPublication> {
@@ -457,5 +483,13 @@ impl RemoteParticipant {
 
     pub fn connection_quality(&self) -> ConnectionQuality {
         self.inner.info.read().connection_quality
+    }
+
+    pub fn kind(&self) -> ParticipantKind {
+        self.inner.info.read().kind
+    }
+
+    pub fn disconnect_reason(&self) -> DisconnectReason {
+        self.inner.info.read().disconnect_reason
     }
 }

@@ -122,14 +122,14 @@ async fn service_task(inner: Arc<ServiceInner>, mut cmd_rx: mpsc::UnboundedRecei
                     key_provider,
                 });
 
+                let mut options = RoomOptions::default();
+                options.auto_subscribe = auto_subscribe;
+                options.e2ee = e2ee;
+
                 let res = Room::connect(
                     &url,
                     &token,
-                    RoomOptions {
-                        auto_subscribe,
-                        e2ee,
-                        ..Default::default()
-                    },
+                    options,
                 )
                 .await;
 
@@ -202,7 +202,7 @@ async fn service_task(inner: Arc<ServiceInner>, mut cmd_rx: mpsc::UnboundedRecei
             }
             AsyncCmd::LogStats => {
                 if let Some(state) = running_state.as_ref() {
-                    for (_, publication) in state.room.local_participant().tracks() {
+                    for (_, publication) in state.room.local_participant().track_publications() {
                         if let Some(track) = publication.track() {
                             log::info!(
                                 "track stats: LOCAL {:?} {:?}",
@@ -212,8 +212,8 @@ async fn service_task(inner: Arc<ServiceInner>, mut cmd_rx: mpsc::UnboundedRecei
                         }
                     }
 
-                    for (_, participant) in state.room.participants() {
-                        for (_, publication) in participant.tracks() {
+                    for (_, participant) in state.room.remote_participants() {
+                        for (_, publication) in participant.track_publications() {
                             if let Some(track) = publication.track() {
                                 log::info!(
                                     "track stats: {:?} {:?} {:?}",

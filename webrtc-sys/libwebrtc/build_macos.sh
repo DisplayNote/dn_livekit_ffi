@@ -70,6 +70,7 @@ cd src
 git apply "$COMMAND_DIR/patches/add_licenses.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 git apply "$COMMAND_DIR/patches/ssl_verify_callback_with_native_handle.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
 git apply "$COMMAND_DIR/patches/add_deps.patch" -v --ignore-space-change --ignore-whitespace --whitespace=nowarn
+
 cd ..
 
 mkdir -p "$ARTIFACTS_DIR/lib"
@@ -99,6 +100,7 @@ gn gen "$OUTPUT_DIR" --root="src" \
   rtc_enable_objc_symbol_export=false \
   rtc_include_dav1d_in_internal_decoder_factory = true \
   rtc_use_h264=true \
+  rtc_use_h265=true \
   use_custom_libcxx=false \
   clang_use_chrome_plugins=false \
   use_rtti=true \
@@ -110,9 +112,10 @@ ninja -C "$OUTPUT_DIR" :default \
   api/task_queue:default_task_queue_factory \
   sdk:native_api \
   sdk:default_codec_factory_objc \
-  pc:peerconnection \
+  pc:peer_connection \
   sdk:videocapture_objc \
-  sdk:mac_framework_objc
+  sdk:mac_framework_objc \
+  desktop_capture_objc
 
 # make libwebrtc.a
 # don't include nasm
@@ -127,4 +130,4 @@ cp "$OUTPUT_DIR/LICENSE.md" "$ARTIFACTS_DIR"
 
 cd src
 find . -name "*.h" -print | cpio -pd "$ARTIFACTS_DIR/include"
-
+find . -name "*.inc" -print | cpio -pd "$ARTIFACTS_DIR/include"

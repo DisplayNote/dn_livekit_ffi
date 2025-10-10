@@ -14,6 +14,7 @@
 
 #[cfg(target_os = "android")]
 pub mod android;
+pub mod apm;
 pub mod audio_resampler;
 pub mod audio_source;
 pub mod audio_stream;

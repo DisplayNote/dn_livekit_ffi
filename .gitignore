@@ -1,3 +1,27 @@
 target
 /.idea
-livekit-ffi_conan
+soxr-sys/test-input.wav
+soxr-sys/test-output.wav
+.DS_Store
+
+# Exclude webrtc build artifacts
+**/.gcs_entries
+
+# Exclude webrtc source directories
+**/libwebrtc/src
+
+# Exclude webrtc build directories
+**/libwebrtc/android-arm-release
+**/libwebrtc/android-arm64-release
+**/libwebrtc/android-arm-debug
+**/libwebrtc/android-arm64-debug
+
+# Exclude vscode settings
+**/.vscode/
+
+# Exclude output directories
+**/out*
+livekit-ffi_conan/
+
+# Exclude third_party directories
+**/third_party

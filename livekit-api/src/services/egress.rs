@@ -120,6 +120,7 @@ impl EgressClient {
                     segment_outputs,
                     image_outputs,
                     output: None, // Deprecated
+                    ..Default::default()
                 },
                 self.base
                     .auth_header(VideoGrants { room_record: true, ..Default::default() }, None)?,
@@ -152,6 +153,7 @@ impl EgressClient {
                     image_outputs,
                     output: None, // Deprecated
                     await_start_signal: options.await_start_signal,
+                    ..Default::default()
                 },
                 self.base
                     .auth_header(VideoGrants { room_record: true, ..Default::default() }, None)?,
@@ -183,6 +185,7 @@ impl EgressClient {
                     stream_outputs,
                     segment_outputs,
                     image_outputs,
+                    ..Default::default()
                 },
                 self.base
                     .auth_header(VideoGrants { room_record: true, ..Default::default() }, None)?,
@@ -214,6 +217,7 @@ impl EgressClient {
                     segment_outputs,
                     image_outputs,
                     output: None, // Deprecated
+                    ..Default::default()
                 },
                 self.base
                     .auth_header(VideoGrants { room_record: true, ..Default::default() }, None)?,
@@ -243,6 +247,7 @@ impl EgressClient {
                         }
                     },
                     track_id: track_id.to_string(),
+                    ..Default::default()
                 },
                 self.base
                     .auth_header(VideoGrants { room_record: true, ..Default::default() }, None)?,

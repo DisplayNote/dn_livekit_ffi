@@ -18,6 +18,7 @@
 
 #include "api/peer_connection_interface.h"
 #include "api/scoped_refptr.h"
+#include "api/task_queue/task_queue_factory.h"
 #include "livekit/audio_device.h"
 #include "media_stream.h"
 #include "rtp_parameters.h"
@@ -63,8 +64,9 @@ class PeerConnectionFactory {
 
  private:
   std::shared_ptr<RtcRuntime> rtc_runtime_;
-  rtc::scoped_refptr<AudioDevice> audio_device_;
-  rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> peer_factory_;
+  webrtc::scoped_refptr<AudioDevice> audio_device_;
+  webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> peer_factory_;
+  webrtc::TaskQueueFactory* task_queue_factory_;
 };
 
 std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory();

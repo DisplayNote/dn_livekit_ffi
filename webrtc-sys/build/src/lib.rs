@@ -12,18 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
 use std::{
-    env, error::Error, fs::{self, File}, io::{self, BufRead, Write}, path, process::Command
+    env,
+    fs::{self, File},
+    io::{self, BufRead, Write},
+    path,
+    process::Command,
 };
 
+use anyhow::{anyhow, Context, Result};
+use flate2::read::GzDecoder;
 use fs2::FileExt;
 use regex::Regex;
 use reqwest::StatusCode;
-use flate2::read::GzDecoder;
 use tar::Archive;
 
 pub const SCRATH_PATH: &str = "livekit_webrtc";
-pub const WEBRTC_TAG: &str = "webrtc-b951613-4";
+pub const WEBRTC_TAG: &str = "webrtc-f4967ef";
 pub const IGNORE_DEFINES: [&str; 2] = ["CR_CLANG_REVISION", "CR_XCODE_VERSION"];
 
 pub fn target_os() -> String {
@@ -57,13 +63,13 @@ pub fn target_arch() -> String {
 }
 
 pub fn target_prefixed_arch() -> String {
-  let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-  match target_arch.as_str() {
-      "arm" => "armeabi-v7a",
-      "aarch64" => "arm64-v8a",
-      _ => &target_arch,
-  }
-  .to_owned()
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    match target_arch.as_str() {
+        "arm" => "armeabi-v7a",
+        "aarch64" => "arm64-v8a",
+        _ => &target_arch,
+    }
+    .to_owned()
 }
 
 /// The full name of the webrtc library
@@ -84,7 +90,16 @@ pub fn use_debug() -> bool {
 /// The location of the custom build is defined by the user
 pub fn custom_dir() -> Option<path::PathBuf> {
     if let Ok(path) = env::var("LK_CUSTOM_WEBRTC") {
-        return Some(path::PathBuf::from(path));
+        let path_buf = path::PathBuf::from(path);
+
+        // If the path is relative, resolve it relative to CARGO_MANIFEST_DIR
+        if path_buf.is_relative() {
+            if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                return Some(path::PathBuf::from(manifest_dir).join(path_buf));
+            }
+        }
+
+        return Some(path_buf);
     }
     None
 }
@@ -160,11 +175,10 @@ pub fn webrtc_defines() -> Vec<(String, Option<String>)> {
     vec
 }
 
-pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
-    download_webrtc()?;
-    //extract_artifact_webrtc()?;
+pub fn configure_jni_symbols() -> Result<()> {
+    download_webrtc().context("Failed to download WebRTC binaries for JNI configuration")?;
 
-    let toolchain = android_ndk_toolchain()?;
+    let toolchain = android_ndk_toolchain().context("Failed to locate Android NDK toolchain")?;
     let toolchain_bin = toolchain.join("bin");
 
     let webrtc_dir = webrtc_dir();
@@ -185,7 +199,7 @@ pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
         jni_regex.captures_iter(&content).map(|cap| cap.get(1).unwrap().as_str()).collect();
 
     if jni_symbols.is_empty() {
-        return Err("No JNI symbols found".into()); // Shouldn't happen
+        return Err(anyhow!("No JNI symbols found")); // Shouldn't happen
     }
 
     // Keep JNI symbols
@@ -195,152 +209,55 @@ pub fn configure_jni_symbols() -> Result<(), Box<dyn Error>> {
 
     // Version script
     let vs_path = out_dir.join("webrtc_jni.map");
-    let mut vs_file = fs::File::create(&vs_path).unwrap();
+    let mut vs_file = fs::File::create(&vs_path).context("Failed to create version script file")?;
 
     let jni_symbols = jni_symbols.join("; ");
-    write!(vs_file, "JNI_WEBRTC {{\n\tglobal: {}; \n}};", jni_symbols).unwrap();
+    write!(vs_file, "JNI_WEBRTC {{\n\tglobal: {}; \n}};", jni_symbols)
+        .context("Failed to write version script")?;
 
     println!("cargo:rustc-link-arg=-Wl,--version-script={}", vs_path.display());
 
     Ok(())
 }
 
-pub fn extract_artifact_webrtc() -> Result<(), Box<dyn Error>> {
+pub fn download_webrtc() -> Result<()> {
     let dir = scratch::path(SCRATH_PATH);
-
-    let flock = fs::File::create(dir.join(".lock"));
-
-    if let Err(err) = flock {
-        println!("Error creating Lock: {err}");
-
-        return Err(Box::new(err));
-    }
-
-    let flock = flock.unwrap();
-
-    let res_flock = flock.lock_exclusive();
-
-    if let Err(err) = res_flock {
-        println!("Error creating locking - lock_exclusive: {err}");
-
-        println!("{err}");
-
-        return Err(Box::new(err));
-    }
-
-    res_flock.unwrap();
-
-    let webrtc_dir = webrtc_dir();
-
-    if webrtc_dir.exists() {
-        return Ok(());
-    }
-
-    if let Some(artifact_dir) = artifact_dir() {
-        let tmp_path = artifact_dir.join(webrtc_triple() + ".zip");
-
-        let tmp_path = path::Path::new(&tmp_path);
-
-        if !tmp_path.exists() {
-            let err = format!("Zip file not found: {tmp_path:?}").into();
-
-            println!("{err}");
-
-            return Err(err);
-        }
-
-        let file = fs::File::options().read(true).open(tmp_path);
-
-        if let Err(err) = file {
-            let err = format!("Error opening {tmp_path:?}, {err}").into();
-
-            println!("{err}");
-
-            return Err(err);
-        }
-
-        let file = file.unwrap();
-
-        let archive = zip::ZipArchive::new(file);
-
-        if let Err(err) = archive {
-            let err = format!("Error creating zip archive, {err}").into();
-
-            println!("{err}");
-
-            return Err(err);
-        }
-
-        let mut archive = archive.unwrap();
-
-        let parent_dir = webrtc_dir.parent().ok_or_else(|| {
-            let err = format!("We cannot get the parent of: {webrtc_dir:?}");
-
-            println!("{err}");
-
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, err)
-        });
-
-        if let Err(err) = parent_dir {
-            let err = format!("Error parent dir {err}").into();
-
-            println!("{err}");
-
-            return Err(err);
-        }
-
-        let parent_dir = parent_dir.unwrap();
-
-        let res = archive.extract(parent_dir);
-
-        if let Err(err) = res {
-            println!("Zip extract err: {err}");
-
-            return Err(Box::new(err));
-        }
-
-        return Ok(());
-    }
-
-    let err = format!("We cannot found the artifact dir: {:?}", artifact_dir()).into();
-
-    println!("{err}");
-
-    return Err(err);
-}
-
-pub fn download_webrtc() -> Result<(), Box<dyn Error>> {
-    let dir = scratch::path(SCRATH_PATH);
-    let flock = fs::File::create(dir.join(".lock"))?;
-    flock.lock_exclusive()?;
+    // temporary fix to avoid github workflow issue
+    fs::create_dir_all(&dir).context("Failed to create scratch_path")?;
+    let flock = File::create(dir.join(".lock"))
+        .context("Failed to create lock file for WebRTC download")?;
+    flock.lock_exclusive().context("Failed to acquire exclusive lock for WebRTC download")?;
 
     let webrtc_dir = webrtc_dir();
     if webrtc_dir.exists() {
         return Ok(());
     }
 
-    let download_url = download_url();
-
-    let mut resp = reqwest::blocking::get(download_url)?;
+    let mut resp = reqwest::blocking::get(download_url())
+        .context("Failed to send HTTP request to download WebRTC")?;
     if resp.status() != StatusCode::OK {
-        return Err(format!("failed to download webrtc: {}", resp.status()).into());
+        return Err(anyhow!("failed to download webrtc: {}", resp.status()));
     }
 
-    let tmp_path = env::var("OUT_DIR").unwrap() + "/webrtc.zip";
-    let tmp_path = path::Path::new(&tmp_path);
-    let mut file = fs::File::options().write(true).read(true).create(true).open(tmp_path)?;
-    resp.copy_to(&mut file)?;
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let tmp_path = PathBuf::from(out_dir).join("webrtc.zip");
+    let mut file = fs::File::options()
+        .write(true)
+        .read(true)
+        .create(true)
+        .open(&tmp_path)
+        .context("Failed to create temporary file for WebRTC download")?;
+    resp.copy_to(&mut file).context("Failed to write WebRTC download to temporary file")?;
 
-    let mut archive = zip::ZipArchive::new(file)?;
-    archive.extract(webrtc_dir.parent().unwrap())?;
+    let mut archive = zip::ZipArchive::new(file).context("Failed to open WebRTC zip archive")?;
+    archive.extract(webrtc_dir.parent().unwrap()).context("Failed to extract WebRTC archive")?;
     drop(archive);
 
-    fs::remove_file(tmp_path)?;
-
+    fs::remove_file(&tmp_path).context("Failed to remove temporary WebRTC zip file")?;
     Ok(())
 }
 
-pub fn android_ndk_toolchain() -> Result<path::PathBuf, &'static str> {
+pub fn android_ndk_toolchain() -> Result<path::PathBuf> {
     let host_os = host_os();
 
     let home = env::var("HOME");
@@ -353,7 +270,7 @@ pub fn android_ndk_toolchain() -> Result<path::PathBuf, &'static str> {
     } else if host_os == Some("windows") {
         path::PathBuf::from(local.unwrap())
     } else {
-        return Err("Unsupported host OS");
+        return Err(anyhow!("Unsupported host OS"));
     };
 
     let ndk_dir = || -> Option<path::PathBuf> {
@@ -394,12 +311,12 @@ pub fn android_ndk_toolchain() -> Result<path::PathBuf, &'static str> {
         } else if host_os == Some("windows") {
             "windows-x86_64"
         } else {
-            return Err("Unsupported host OS");
+            return Err(anyhow!("Unsupported host OS"));
         };
 
         Ok(ndk_dir.join(format!("toolchains/llvm/prebuilt/{}", llvm_dir)))
     } else {
-        Err("Android NDK not found, please set ANDROID_NDK_HOME to your NDK path")
+        Err(anyhow!("Android NDK not found, please set ANDROID_NDK_HOME to your NDK path"))
     }
 }
 

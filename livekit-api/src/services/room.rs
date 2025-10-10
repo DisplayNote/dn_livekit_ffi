@@ -17,12 +17,14 @@ use std::collections::HashMap;
 
 use super::{ServiceBase, ServiceResult, LIVEKIT_PACKAGE};
 use crate::{access_token::VideoGrants, get_env_keys, services::twirp_client::TwirpClient};
+use rand::Rng;
 
 const SVC: &str = "RoomService";
 
 #[derive(Debug, Clone, Default)]
 pub struct CreateRoomOptions {
     pub empty_timeout: u32,
+    pub departure_timeout: u32,
     pub max_participants: u32,
     pub node_id: String,
     pub metadata: String,
@@ -77,6 +79,7 @@ impl RoomClient {
                 proto::CreateRoomRequest {
                     name: name.to_owned(),
                     empty_timeout: options.empty_timeout,
+                    departure_timeout: options.departure_timeout,
                     max_participants: options.max_participants,
                     node_id: options.node_id,
                     metadata: options.metadata,
@@ -200,6 +203,64 @@ impl RoomClient {
             .map_err(Into::into)
     }
 
+    pub async fn forward_participant(
+        &self,
+        room: &str,
+        identity: &str,
+        destination_room: &str,
+    ) -> ServiceResult<()> {
+        self.client
+            .request(
+                SVC,
+                "ForwardParticipant",
+                proto::ForwardParticipantRequest {
+                    room: room.to_owned(),
+                    identity: identity.to_owned(),
+                    destination_room: destination_room.to_owned(),
+                },
+                self.base.auth_header(
+                    VideoGrants {
+                        room_admin: true,
+                        room: room.to_owned(),
+                        destination_room: destination_room.to_owned(),
+                        ..Default::default()
+                    },
+                    None,
+                )?,
+            )
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn move_participant(
+        &self,
+        room: &str,
+        identity: &str,
+        destination_room: &str,
+    ) -> ServiceResult<()> {
+        self.client
+            .request(
+                SVC,
+                "MoveParticipant",
+                proto::MoveParticipantRequest {
+                    room: room.to_owned(),
+                    identity: identity.to_owned(),
+                    destination_room: destination_room.to_owned(),
+                },
+                self.base.auth_header(
+                    VideoGrants {
+                        room_admin: true,
+                        room: room.to_owned(),
+                        destination_room: destination_room.to_owned(),
+                        ..Default::default()
+                    },
+                    None,
+                )?,
+            )
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn mute_published_track(
         &self,
         room: &str,
@@ -288,6 +349,8 @@ impl RoomClient {
         data: Vec<u8>,
         options: SendDataOptions,
     ) -> ServiceResult<()> {
+        let mut rng = rand::rng();
+        let nonce: Vec<u8> = (0..16).map(|_| rng.random::<u8>()).collect();
         #[allow(deprecated)]
         self.client
             .request(
@@ -300,6 +363,7 @@ impl RoomClient {
                     topic: options.topic,
                     kind: options.kind as i32,
                     destination_identities: options.destination_identities,
+                    nonce,
                 },
                 self.base.auth_header(
                     VideoGrants { room_admin: true, room: room.to_owned(), ..Default::default() },

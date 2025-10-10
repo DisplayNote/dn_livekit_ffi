@@ -22,10 +22,12 @@ use crate::{prelude::*, rtc_engine::RtcEngine};
 
 mod local_participant;
 mod remote_participant;
+mod rpc;
 use crate::room::utils;
 
 pub use local_participant::*;
 pub use remote_participant::*;
+pub use rpc::*;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ConnectionQuality {
@@ -33,6 +35,35 @@ pub enum ConnectionQuality {
     Good,
     Poor,
     Lost,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ParticipantKind {
+    Standard,
+    Ingress,
+    Egress,
+    Sip,
+    Agent,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum DisconnectReason {
+    UnknownReason,
+    ClientInitiated,
+    DuplicateIdentity,
+    ServerShutdown,
+    ParticipantRemoved,
+    RoomDeleted,
+    StateMismatch,
+    JoinFailure,
+    Migration,
+    SignalClose,
+    RoomClosed,
+    UserUnavailable,
+    UserRejected,
+    SipTrunkFailure,
+    ConnectionTimeout,
+    MediaFailure,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +83,8 @@ impl Participant {
         pub fn is_speaking(self: &Self) -> bool;
         pub fn audio_level(self: &Self) -> f32;
         pub fn connection_quality(self: &Self) -> ConnectionQuality;
+        pub fn kind(self: &Self) -> ParticipantKind;
+        pub fn disconnect_reason(self: &Self) -> DisconnectReason;
 
         pub(crate) fn update_info(self: &Self, info: proto::ParticipantInfo) -> ();
 
@@ -80,6 +113,8 @@ struct ParticipantInfo {
     pub speaking: bool,
     pub audio_level: f32,
     pub connection_quality: ConnectionQuality,
+    pub kind: ParticipantKind,
+    pub disconnect_reason: DisconnectReason,
 }
 
 type TrackMutedHandler = Box<dyn Fn(Participant, TrackPublication) + Send>;
@@ -104,6 +139,13 @@ pub(super) struct ParticipantInner {
     events: Arc<ParticipantEvents>,
 }
 
+#[derive(Clone)]
+pub struct ParticipantTrackPermission {
+    pub participant_identity: ParticipantIdentity,
+    pub allow_all: bool,
+    pub allowed_track_sids: Vec<TrackSid>,
+}
+
 pub(super) fn new_inner(
     rtc_engine: Arc<RtcEngine>,
     sid: ParticipantSid,
@@ -111,6 +153,7 @@ pub(super) fn new_inner(
     name: String,
     metadata: String,
     attributes: HashMap<String, String>,
+    kind: ParticipantKind,
 ) -> Arc<ParticipantInner> {
     Arc::new(ParticipantInner {
         rtc_engine,
@@ -120,9 +163,11 @@ pub(super) fn new_inner(
             name,
             metadata,
             attributes,
+            kind,
             speaking: false,
             audio_level: 0.0,
             connection_quality: ConnectionQuality::Excellent,
+            disconnect_reason: DisconnectReason::UnknownReason,
         }),
         track_publications: Default::default(),
         events: Default::default(),
@@ -135,6 +180,8 @@ pub(super) fn update_info(
     new_info: proto::ParticipantInfo,
 ) {
     let mut info = inner.info.write();
+    info.disconnect_reason = new_info.disconnect_reason().into();
+    info.kind = new_info.kind().into();
     info.sid = new_info.sid.try_into().unwrap();
     info.identity = new_info.identity.into();
 

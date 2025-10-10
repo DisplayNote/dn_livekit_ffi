@@ -1,3 +1,9 @@
 [submodule "livekit/protocol"]
 	path = livekit-protocol/protocol
 	url = https://github.com/livekit/protocol
+[submodule "yuv-sys/libyuv"]
+	path = yuv-sys/libyuv
+	url = https://chromium.googlesource.com/libyuv/libyuv
+[submodule "webrtc-sys/third_party/x264"]
+	path = webrtc-sys/third_party/x264
+	url = https://code.videolan.org/videolan/x264.git

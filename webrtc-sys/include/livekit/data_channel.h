@@ -39,7 +39,7 @@ class DataChannel {
  public:
   explicit DataChannel(
       std::shared_ptr<RtcRuntime> rtc_runtime,
-      rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel);
+      webrtc::scoped_refptr<webrtc::DataChannelInterface> data_channel);
   ~DataChannel();
 
   void register_observer(rust::Box<DataChannelObserverWrapper> observer) const;
@@ -49,11 +49,12 @@ class DataChannel {
   rust::String label() const;
   DataState state() const;
   void close() const;
+  uint64_t buffered_amount() const;
 
  private:
   mutable webrtc::Mutex mutex_;
   std::shared_ptr<RtcRuntime> rtc_runtime_;
-  rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;
+  webrtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;
   mutable std::unique_ptr<NativeDataChannelObserver> observer_;
 };
 
