@@ -23,6 +23,8 @@ class LivekitFfiConan(ConanFile):
               self.cpp_info.libdirs = ["lib/armeabi-v7a"]
           elif self.settings.arch == 'armv8':
               self.cpp_info.libdirs = ["lib/arm64-v8a"]
+          elif self.settings.arch == 'x86_64':
+              self.cpp_info.libdirs = ["lib/x86_64"]
       elif self.settings.os == "Windows":
           self.cpp_info.libdirs = ["lib"]
       else:
@@ -40,6 +42,9 @@ class LivekitFfiConan(ConanFile):
             elif self.settings.arch == "armv7":
                 lib_folder = "lib/android/armeabi-v7a"
                 dst_lib_folder = "lib/armeabi-v7a"
+            elif self.settings.arch == "x86_64":
+                lib_folder = "lib/android/x86_64"
+                dst_lib_folder = "lib/x86_64"
 
             self.copy("*.a", dst=dst_lib_folder, src=lib_folder, keep_path=False)
             self.copy("*.so", dst=dst_lib_folder, src=lib_folder, keep_path=False)
