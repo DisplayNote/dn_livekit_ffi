@@ -397,6 +397,7 @@ fn setup_x264() -> (PathBuf, PathBuf) {
         let x264_static_lib = match (target_os.as_str(), target_arch.as_str()) {
             ("android", "aarch64") => x264_lib.join("libx264-android-aarch64.a"),
             ("android", "arm") => x264_lib.join("libx264-android-armv7.a"),
+            ("android", "x86_64") => x264_lib.join("libx264-android-x86_64.a"),
             ("linux", "x86_64") => x264_lib.join("libx264.a"),
             _ => x264_lib.join("libx264.a"),
         };
@@ -464,6 +465,13 @@ fn configure_and_build_x264_android(
             "llvm-ar",
             "CC_armv7_linux_androideabi",
             "AR_armv7_linux_androideabi",
+        ),
+        "x86_64" => (
+            "x86_64-linux-android",
+            "x86_64-linux-android28-clang",
+            "llvm-ar",
+            "CC_x86_64_linux_androideabi",
+            "AR_x86_64_linux_androideabi",
         ),
         _ => panic!("Unsupported Android architecture: {}", target_arch),
     };
@@ -551,9 +559,13 @@ fn configure_and_build_x264_android(
 fn configure_android_sysroot(builder: &mut cc::Build) {
     let toolchain = webrtc_sys_build::android_ndk_toolchain().unwrap();
     let toolchain_lib = toolchain.join("lib");
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
 
     let sysroot = toolchain.join("sysroot").canonicalize().unwrap();
-    println!("cargo:rustc-link-search={}", toolchain_lib.display());
+    // Do not add this on Android x86_64 to avoid linking with host libraries when crossbuillding in Linux
+    if target_arch != "x86_64" {
+        println!("cargo:rustc-link-search={}", toolchain_lib.display());
+    }
 
     builder.flag(format!("-isysroot{}", sysroot.display()).as_str());
 }

@@ -53,6 +53,10 @@ build_android() {
         # Build armv7 (32-bit)
         cargo ndk --target armv7-linux-androideabi build $build_flags --platform 21 --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
         create_folder_structure "armv7-linux-androideabi" "$profile"
+    elif [ "$arch" = "x64" ]; then
+        # Build x86_64
+        cargo ndk --target x86_64-linux-android build $build_flags --platform 21 --no-default-features --features "rustls-tls-webpki-roots,webrtc-sys/use_x264"
+        create_folder_structure "x86_64-linux-android" "$profile"
     else
         echo "Error: Invalid architecture: $arch. Must be 'arm64' or 'arm'."
         exit 1
@@ -89,6 +93,11 @@ create_folder_structure() {
             mkdir -p "$conan_dir/lib/android/armeabi-v7a"
             cp "../target/$target/$profile/liblivekit_ffi.so" "$conan_dir/lib/android/armeabi-v7a/"
             cp "../target/$target/$profile/libwebrtc.jar" "$conan_dir/lib/android/armeabi-v7a/"
+            ;;
+        x86_64-linux-android)
+            mkdir -p "$conan_dir/lib/android/x86_64"
+            cp "../target/$target/$profile/liblivekit_ffi.so" "$conan_dir/lib/android/x86_64/"
+            cp "../target/$target/$profile/libwebrtc.jar" "$conan_dir/lib/android/x86_64/"
             ;;
         *)
             echo "Error: Unrecognized target: $target"
@@ -135,8 +144,8 @@ main() {
     fi
 
     # Validate arch parameter for Android
-    if [ "$platform" = "android" ] && [[ "$arch" != "arm64" && "$arch" != "arm" ]]; then
-        echo "Error: Invalid architecture '$arch'. Must be 'arm64' or 'arm'."
+    if [ "$platform" = "android" ] && [[ "$arch" != "arm64" && "$arch" != "arm" && "$arch" != "x64" ]]; then
+        echo "Error: Invalid architecture '$arch'. Must be 'arm64', 'arm' or 'x64'."
         usage
     fi
 
