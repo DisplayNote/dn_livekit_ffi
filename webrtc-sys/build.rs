@@ -558,14 +558,11 @@ fn configure_and_build_x264_android(
 
 fn configure_android_sysroot(builder: &mut cc::Build) {
     let toolchain = webrtc_sys_build::android_ndk_toolchain().unwrap();
-    let toolchain_lib = toolchain.join("lib");
-    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
 
     let sysroot = toolchain.join("sysroot").canonicalize().unwrap();
-    // Do not add this on Android x86_64 to avoid linking with host libraries when crossbuillding in Linux
-    if target_arch != "x86_64" {
-        println!("cargo:rustc-link-search={}", toolchain_lib.display());
-    }
+    // Do NOT add toolchain/lib to the search path: it contains host (x86_64) libraries
+    // that are incompatible with ARM targets.  cargo-ndk's clang linker wrapper already
+    // passes the correct sysroot to ld.lld so target-specific libc++abi.a is found there.
 
     builder.flag(format!("-isysroot{}", sysroot.display()).as_str());
 }
