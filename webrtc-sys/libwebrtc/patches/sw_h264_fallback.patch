@@ -1,9 +1,7 @@
-diff --git a/sdk/android/api/livekit/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/android/api/livekit/org/webrtc/HardwareVideoEncoderFactory.java
-index 0000000000..0000000000 100644
---- a/sdk/android/api/livekit/org/webrtc/HardwareVideoEncoderFactory.java
-+++ b/sdk/android/api/livekit/org/webrtc/HardwareVideoEncoderFactory.java
-@@ -46,6 +46,11 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
-   @Nullable private final EglBase14.Context sharedContext;
+diff --git a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
+--- a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
++++ b/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
+@@ -47,6 +47,11 @@
    private final boolean enableIntelVp8Encoder;
    private final boolean enableH264HighProfile;
    @Nullable private final Predicate<MediaCodecInfo> codecAllowedPredicate;
@@ -12,23 +10,22 @@ index 0000000000..0000000000 100644
 +  // encoder (e.g. OMX.google.h264.encoder) on devices whose HW encoder produces output that
 +  // clients cannot decode.
 +  private final boolean allowSoftwareCodecs;
-
+ 
    /**
     * Creates a HardwareVideoEncoderFactory that supports surface texture encoding.
-@@ -59,7 +64,8 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+@@ -59,7 +64,7 @@
    public HardwareVideoEncoderFactory(
        EglBase.Context sharedContext, boolean enableIntelVp8Encoder, boolean enableH264HighProfile) {
      this(sharedContext, enableIntelVp8Encoder, enableH264HighProfile,
 -        /* codecAllowedPredicate= */ null);
 +        /* codecAllowedPredicate= */ null, /* allowSoftwareCodecs= */ false);
    }
-
+ 
    /**
-@@ -73,16 +79,99 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+@@ -74,6 +79,27 @@
     */
    public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
        boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate) {
--    // Texture mode requires EglBase14.
 +    this(sharedContext, enableIntelVp8Encoder, enableH264HighProfile, codecAllowedPredicate,
 +        /* allowSoftwareCodecs= */ false);
 +  }
@@ -50,19 +47,16 @@ index 0000000000..0000000000 100644
 +  public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
 +      boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate,
 +      boolean allowSoftwareCodecs) {
-+    // Texture mode requires EglBase14.
+     // Texture mode requires EglBase14.
      if (sharedContext instanceof EglBase14.Context) {
        this.sharedContext = (EglBase14.Context) sharedContext;
-     } else {
-       Logging.w(TAG, "No shared EglBase.Context.  Encoders will not use texture mode.");
-       this.sharedContext = null;
-     }
+@@ -84,6 +110,82 @@
      this.enableIntelVp8Encoder = enableIntelVp8Encoder;
      this.enableH264HighProfile = enableH264HighProfile;
      this.codecAllowedPredicate = codecAllowedPredicate;
 +    this.allowSoftwareCodecs = allowSoftwareCodecs;
-   }
-
++  }
++
 +  /**
 +   * Returns the codec name of the first HW H264 encoder if it is detected as non-compliant
 +   * (likely to produce output that remote clients cannot decode), or {@code null} if the encoder
@@ -136,15 +130,13 @@ index 0000000000..0000000000 100644
 +      return null;
 +    }
 +    return null;
-+  }
-+
+   }
+ 
    @Deprecated
-   public HardwareVideoEncoderFactory(boolean enableIntelVp8Encoder, boolean enableH264HighProfile) {
-     this(null, enableIntelVp8Encoder, enableH264HighProfile);
-@@ -185,7 +275,13 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+@@ -182,11 +284,13 @@
      return isHardwareSupportedInCurrentSdk(info, type) && isMediaCodecAllowed(info);
    }
-
+ 
 -  // Returns true if the given MediaCodecInfo indicates a hardware module that is supported on the
 -  // current SDK.
 +  // Returns true if the given MediaCodecInfo indicates a module that is supported on the current
@@ -156,3 +148,5 @@ index 0000000000..0000000000 100644
 -      return info.isHardwareAccelerated();
 +      return allowSoftwareCodecs ? !info.isHardwareAccelerated() : info.isHardwareAccelerated();
      }
+ 
+     switch (type) {
