@@ -112,24 +112,12 @@ CreateSoftwareH264VideoEncoderFactory() {
   return webrtc::JavaToNativeVideoEncoderFactory(env, encoder_factory);
 }
 
-// Returns true for HW encoder implementation names known to produce H264 that remote clients
-// cannot decode (e.g. OMX.realtek.* encodes Baseline Level4 instead of Level 3.1 in SDP).
-// Called at factory init time via GetFirstHardwareH264EncoderName() — not at encode time.
-static bool IsKnownProblematicHwEncoder(const std::string& impl_name) {
-  static const char* const kBlocklist[] = {
-      "OMX.realtek.",
-  };
-  for (const char* prefix : kBlocklist) {
-    if (impl_name.compare(0, strlen(prefix), prefix) == 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Calls HardwareVideoEncoderFactory.findFirstHardwareH264EncoderName() and returns the result.
-// Returns an empty string if no HW H264 encoder is found or the JNI call fails.
-static std::string GetFirstHardwareH264EncoderName() {
+// Calls HardwareVideoEncoderFactory.findNonCompliantHardwareH264EncoderName() and returns the
+// result.  Returns a non-empty string (the encoder name) when the Java method determines the HW
+// H264 encoder is non-compliant (capability check: no Level 3.1 declared, OR name blocklist
+// match).  Returns an empty string when the encoder is compliant or no HW H264 encoder exists.
+// Non-compliance detection logic lives entirely in Java to keep it close to the MediaCodec APIs.
+static std::string GetNonCompliantHardwareH264EncoderName() {
   JNIEnv* env = webrtc::AttachCurrentThreadIfNeeded();
   webrtc::ScopedJavaLocalRef<jclass> factory_class =
       webrtc::GetClass(env, "livekit/org/webrtc/HardwareVideoEncoderFactory");
@@ -137,7 +125,7 @@ static std::string GetFirstHardwareH264EncoderName() {
     return "";
   }
   jmethodID method = env->GetStaticMethodID(
-      factory_class.obj(), "findFirstHardwareH264EncoderName",
+      factory_class.obj(), "findNonCompliantHardwareH264EncoderName",
       "()Ljava/lang/String;");
   if (!method) {
     return "";
@@ -189,15 +177,14 @@ AndroidVideoEncoderFactory::AndroidVideoEncoderFactory()
   // accessible via VideoEncoderWrapper::GetEncoderInfo() AFTER InitEncode() is called.
   // To avoid creating and immediately destroying a HW encoder just to read its name, we
   // query MediaCodecList directly via a static Java method instead.
-  std::string hwH264Name = GetFirstHardwareH264EncoderName();
-  if (!hwH264Name.empty() && IsKnownProblematicHwEncoder(hwH264Name)) {
-    RTC_LOG(LS_WARNING) << "HW H264 encoder \"" << hwH264Name
-                        << "\" is on the SW-fallback list — SW H264 encoder will be used";
+  std::string nonCompliantName = GetNonCompliantHardwareH264EncoderName();
+  if (!nonCompliantName.empty()) {
+    RTC_LOG(LS_WARNING) << "HW H264 encoder \"" << nonCompliantName
+                        << "\" detected as non-compliant — SW H264 encoder will be used";
     m_swH264EncoderFactory = CreateSoftwareH264VideoEncoderFactory();
   } else {
     RTC_LOG(LS_INFO) << "HW H264 encoder: \""
-                     << (hwH264Name.empty() ? "(none)" : hwH264Name.c_str())
-                     << "\" — HW encoder will be used";
+                     << "HW H264 encoder appears compliant — HW encoder will be used";
   }
   RTC_LOG(LS_INFO) << "AndroidVideoEncoderFactory created";
 }

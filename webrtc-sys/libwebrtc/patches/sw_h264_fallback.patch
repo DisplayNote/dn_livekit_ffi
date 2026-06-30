@@ -10,7 +10,7 @@ index 0000000000..0000000000 100644
 +  // When true, isSupportedCodec() selects software-only MediaCodec encoders (those where
 +  // isHardwareAccelerated() == false) instead of hardware-only ones.  Used to force a SW H264
 +  // encoder (e.g. OMX.google.h264.encoder) on devices whose HW encoder produces output that
-+  // clients cannot decode (e.g. Realtek OMX producing H264 Level4 vs. SDP-negotiated Level 3.1).
++  // clients cannot decode.
 +  private final boolean allowSoftwareCodecs;
 
    /**
@@ -24,7 +24,7 @@ index 0000000000..0000000000 100644
    }
 
    /**
-@@ -73,16 +79,48 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+@@ -73,16 +79,99 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
     */
    public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
        boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate) {
@@ -38,8 +38,8 @@ index 0000000000..0000000000 100644
 +   *
 +   * <p>When {@code allowSoftwareCodecs} is {@code true} the factory selects software MediaCodec
 +   * encoders (those where {@link MediaCodecInfo#isHardwareAccelerated()} returns {@code false})
-+   * instead of hardware-accelerated ones.  This is useful on devices whose hardware H264 encoder
-+   * produces output that remote clients cannot decode.
++   * instead of hardware-accelerated ones.  Used to force a SW H264 encoder on devices whose HW
++   * encoder produces output that remote clients cannot decode.
 +   *
 +   * @param sharedContext may be null.
 +   * @param enableIntelVp8Encoder true if Intel VP8 encoder is enabled.
@@ -64,25 +64,76 @@ index 0000000000..0000000000 100644
    }
 
 +  /**
-+   * Returns the codec name of the first hardware H264 encoder on this device, or {@code null} if
-+   * none is found.  Called from C++ at factory initialization time to detect problematic HW
-+   * encoder implementations (e.g. OMX.realtek.*) before any encoder instance is created.
++   * Returns the codec name of the first HW H264 encoder if it is detected as non-compliant
++   * (likely to produce output that remote clients cannot decode), or {@code null} if the encoder
++   * appears compliant or no HW H264 encoder is found.
++   *
++   * <p>Non-compliance is determined by two checks, either of which is sufficient:
++   * <ol>
++   *   <li><b>Capability check (primary)</b>: the encoder's declared {@code profileLevels} do not
++   *       include H264 Level 3.1 or lower.  Encoders that only claim Level 4+ capability are
++   *       likely to embed a non-standard level in every SPS NAL, causing client decoders to
++   *       reject IDR frames when the SDP negotiated Level 3.1.
++   *   <li><b>Name blocklist (secondary)</b>: the codec name starts with a known-bad vendor prefix
++   *       (e.g. {@code OMX.realtek.}).  Catches encoders that claim Level 3.1 capability in their
++   *       {@code profileLevels} but still produce Level 4 SPS headers at runtime.
++   * </ol>
 +   */
 +  @Nullable
-+  public static String findFirstHardwareH264EncoderName() {
++  public static String findNonCompliantHardwareH264EncoderName() {
++    // Encoders known to produce non-standard H264 SPS even when they claim Level 3.1 capability.
++    final String[] NAME_BLOCKLIST = {"OMX.realtek."};
++
 +    final MediaCodecList list = new MediaCodecList(MediaCodecList.ALL_CODECS);
 +    for (MediaCodecInfo info : list.getCodecInfos()) {
 +      if (info == null || !info.isEncoder()) continue;
 +      if (!MediaCodecUtils.codecSupportsType(info, VideoCodecMimeType.H264)) continue;
++
++      // Identify hardware encoders using the same criteria as isHardwareSupportedInCurrentSdk().
++      final boolean isHw;
 +      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-+        if (info.isHardwareAccelerated()) return info.getName();
++        isHw = info.isHardwareAccelerated();
 +      } else {
-+        String name = info.getName();
-+        if (name.startsWith(QCOM_PREFIX) || name.startsWith(EXYNOS_PREFIX)
-+            || name.startsWith(INTEL_PREFIX)) {
++        final String n = info.getName();
++        isHw = n.startsWith(QCOM_PREFIX) || n.startsWith(EXYNOS_PREFIX)
++            || n.startsWith(INTEL_PREFIX);
++      }
++      if (!isHw) continue;
++
++      final String name = info.getName();
++
++      // Primary check: if the encoder does not declare Level 3.1 or lower in profileLevels it
++      // will likely embed a non-standard level in SPS NALs, breaking client decode.
++      boolean capabilityCompliant = false;
++      try {
++        final MediaCodecInfo.CodecCapabilities caps = info.getCapabilitiesForType("video/avc");
++        for (MediaCodecInfo.CodecProfileLevel pl : caps.profileLevels) {
++          if (pl.level <= MediaCodecInfo.CodecProfileLevel.AVCLevel31) {
++            capabilityCompliant = true;
++            break;
++          }
++        }
++      } catch (Exception e) {
++        // Query failure — treat conservatively as non-compliant.
++        Logging.w(TAG, "Cannot query H264 capabilities of " + name + ": " + e.getMessage());
++      }
++
++      if (!capabilityCompliant) {
++        Logging.w(TAG, name + " does not declare H264 Level 3.1 support — SW encoder will be used");
++        return name;
++      }
++
++      // Secondary check: name-based blocklist for encoders that claim Level 3.1 capability
++      // but produce Level 4 SPS at runtime.
++      for (final String prefix : NAME_BLOCKLIST) {
++        if (name.startsWith(prefix)) {
++          Logging.w(TAG, name + " is on SW-fallback blocklist — SW encoder will be used");
 +          return name;
 +        }
 +      }
++
++      // First HW H264 encoder found and passed both checks — use it.
++      return null;
 +    }
 +    return null;
 +  }
@@ -90,16 +141,16 @@ index 0000000000..0000000000 100644
    @Deprecated
    public HardwareVideoEncoderFactory(boolean enableIntelVp8Encoder, boolean enableH264HighProfile) {
      this(null, enableIntelVp8Encoder, enableH264HighProfile);
-@@ -185,7 +223,13 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+@@ -185,7 +275,13 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
      return isHardwareSupportedInCurrentSdk(info, type) && isMediaCodecAllowed(info);
    }
 
 -  // Returns true if the given MediaCodecInfo indicates a hardware module that is supported on the
 -  // current SDK.
-+  // Returns true if the given MediaCodecInfo indicates a module that is supported on the
-+  // current SDK.  When allowSoftwareCodecs is true the logic is inverted: only codecs where
-+  // isHardwareAccelerated() returns false are accepted, so that findCodecForType() picks the
-+  // software MediaCodec H264 encoder (e.g. OMX.google.h264.encoder) instead of the HW one.
++  // Returns true if the given MediaCodecInfo indicates a module that is supported on the current
++  // SDK.  When allowSoftwareCodecs is true the logic is inverted on Android Q+: only codecs where
++  // isHardwareAccelerated() is false are accepted, directing findCodecForType() to the SW MediaCodec
++  // H264 encoder (e.g. OMX.google.h264.encoder) instead of the HW one.
    private boolean isHardwareSupportedInCurrentSdk(MediaCodecInfo info, VideoCodecMimeType type) {
      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 -      return info.isHardwareAccelerated();
