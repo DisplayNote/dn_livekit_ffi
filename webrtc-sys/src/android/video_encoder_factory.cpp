@@ -128,6 +128,13 @@ static std::string GetNonCompliantHardwareH264EncoderName() {
       factory_class.obj(), "findNonCompliantHardwareH264EncoderName",
       "()Ljava/lang/String;");
   if (!method) {
+    // GetStaticMethodID throws NoSuchMethodError as a pending JNI exception when
+    // the method is absent. Clear it so subsequent JNI calls don't abort.
+    if (env->ExceptionCheck()) {
+      env->ExceptionClear();
+    }
+    RTC_LOG(LS_WARNING) << "findNonCompliantHardwareH264EncoderName not found "
+                           "— libwebrtc.jar may be stale; assuming HW encoder is compliant";
     return "";
   }
   jstring name_jstr = static_cast<jstring>(
