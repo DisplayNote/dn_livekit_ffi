@@ -1,0 +1,107 @@
+diff --git a/sdk/android/api/livekit/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/android/api/livekit/org/webrtc/HardwareVideoEncoderFactory.java
+index 0000000000..0000000000 100644
+--- a/sdk/android/api/livekit/org/webrtc/HardwareVideoEncoderFactory.java
++++ b/sdk/android/api/livekit/org/webrtc/HardwareVideoEncoderFactory.java
+@@ -46,6 +46,11 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+   @Nullable private final EglBase14.Context sharedContext;
+   private final boolean enableIntelVp8Encoder;
+   private final boolean enableH264HighProfile;
+   @Nullable private final Predicate<MediaCodecInfo> codecAllowedPredicate;
++  // When true, isSupportedCodec() selects software-only MediaCodec encoders (those where
++  // isHardwareAccelerated() == false) instead of hardware-only ones.  Used to force a SW H264
++  // encoder (e.g. OMX.google.h264.encoder) on devices whose HW encoder produces output that
++  // clients cannot decode (e.g. Realtek OMX producing H264 Level4 vs. SDP-negotiated Level 3.1).
++  private final boolean allowSoftwareCodecs;
+
+   /**
+    * Creates a HardwareVideoEncoderFactory that supports surface texture encoding.
+@@ -59,7 +64,8 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+   public HardwareVideoEncoderFactory(
+       EglBase.Context sharedContext, boolean enableIntelVp8Encoder, boolean enableH264HighProfile) {
+     this(sharedContext, enableIntelVp8Encoder, enableH264HighProfile,
+-        /* codecAllowedPredicate= */ null);
++        /* codecAllowedPredicate= */ null, /* allowSoftwareCodecs= */ false);
+   }
+
+   /**
+@@ -73,16 +79,48 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+    */
+   public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
+       boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate) {
+-    // Texture mode requires EglBase14.
++    this(sharedContext, enableIntelVp8Encoder, enableH264HighProfile, codecAllowedPredicate,
++        /* allowSoftwareCodecs= */ false);
++  }
++
++  /**
++   * Creates a HardwareVideoEncoderFactory that can optionally select software MediaCodec encoders.
++   *
++   * <p>When {@code allowSoftwareCodecs} is {@code true} the factory selects software MediaCodec
++   * encoders (those where {@link MediaCodecInfo#isHardwareAccelerated()} returns {@code false})
++   * instead of hardware-accelerated ones.  This is useful on devices whose hardware H264 encoder
++   * produces output that remote clients cannot decode.
++   *
++   * @param sharedContext may be null.
++   * @param enableIntelVp8Encoder true if Intel VP8 encoder is enabled.
++   * @param enableH264HighProfile true if H264 High Profile is enabled.
++   * @param codecAllowedPredicate optional predicate to filter codecs; null means allow all.
++   * @param allowSoftwareCodecs when true, selects SW (non-hardware-accelerated) codecs.
++   */
++  public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
++      boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate,
++      boolean allowSoftwareCodecs) {
++    // Texture mode requires EglBase14.
+     if (sharedContext instanceof EglBase14.Context) {
+       this.sharedContext = (EglBase14.Context) sharedContext;
+     } else {
+       Logging.w(TAG, "No shared EglBase.Context.  Encoders will not use texture mode.");
+       this.sharedContext = null;
+     }
+     this.enableIntelVp8Encoder = enableIntelVp8Encoder;
+     this.enableH264HighProfile = enableH264HighProfile;
+     this.codecAllowedPredicate = codecAllowedPredicate;
++    this.allowSoftwareCodecs = allowSoftwareCodecs;
+   }
+
++  /**
++   * Returns the codec name of the first hardware H264 encoder on this device, or {@code null} if
++   * none is found.  Called from C++ at factory initialization time to detect problematic HW
++   * encoder implementations (e.g. OMX.realtek.*) before any encoder instance is created.
++   */
++  @Nullable
++  public static String findFirstHardwareH264EncoderName() {
++    final MediaCodecList list = new MediaCodecList(MediaCodecList.ALL_CODECS);
++    for (MediaCodecInfo info : list.getCodecInfos()) {
++      if (info == null || !info.isEncoder()) continue;
++      if (!MediaCodecUtils.codecSupportsType(info, VideoCodecMimeType.H264)) continue;
++      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++        if (info.isHardwareAccelerated()) return info.getName();
++      } else {
++        String name = info.getName();
++        if (name.startsWith(QCOM_PREFIX) || name.startsWith(EXYNOS_PREFIX)
++            || name.startsWith(INTEL_PREFIX)) {
++          return name;
++        }
++      }
++    }
++    return null;
++  }
++
+   @Deprecated
+   public HardwareVideoEncoderFactory(boolean enableIntelVp8Encoder, boolean enableH264HighProfile) {
+     this(null, enableIntelVp8Encoder, enableH264HighProfile);
+@@ -185,7 +223,13 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+     return isHardwareSupportedInCurrentSdk(info, type) && isMediaCodecAllowed(info);
+   }
+
+-  // Returns true if the given MediaCodecInfo indicates a hardware module that is supported on the
+-  // current SDK.
++  // Returns true if the given MediaCodecInfo indicates a module that is supported on the
++  // current SDK.  When allowSoftwareCodecs is true the logic is inverted: only codecs where
++  // isHardwareAccelerated() returns false are accepted, so that findCodecForType() picks the
++  // software MediaCodec H264 encoder (e.g. OMX.google.h264.encoder) instead of the HW one.
+   private boolean isHardwareSupportedInCurrentSdk(MediaCodecInfo info, VideoCodecMimeType type) {
+     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-      return info.isHardwareAccelerated();
++      return allowSoftwareCodecs ? !info.isHardwareAccelerated() : info.isHardwareAccelerated();
+     }

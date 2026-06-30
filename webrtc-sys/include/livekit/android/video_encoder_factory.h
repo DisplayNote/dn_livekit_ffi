@@ -48,6 +48,9 @@ class AndroidVideoEncoderFactory : public webrtc::VideoEncoderFactory {
   const std::unique_ptr<webrtc::VideoEncoderFactory> m_builtinEncoderFactory;
   std::unique_ptr<webrtc::VideoEncoderFactory> m_hwEncoderFactory;
   std::unique_ptr<webrtc::VideoEncoderFactory> m_swEncoderFactory;
+  // SW H264-only factory (HardwareVideoEncoderFactory with allowSoftwareCodecs=true).
+  // Used as a fallback for HW encoders on the IsKnownProblematicHwEncoder() blocklist.
+  std::unique_ptr<webrtc::VideoEncoderFactory> m_swH264EncoderFactory;
 };
 
 std::unique_ptr<webrtc::VideoEncoderFactory> CreateAndroidVideoEncoderFactory();
