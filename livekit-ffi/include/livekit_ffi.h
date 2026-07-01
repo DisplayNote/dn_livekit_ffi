@@ -47,6 +47,11 @@ void livekit_ffi_dispose();
 /// Always returns false on non-Android platforms.
 bool livekit_ffi_probe_android_h264();
 
+/// Explicitly sets whether the SW H264 encoder should be used instead of HW.
+/// Call before the first room connection.  Always a no-op on non-Android
+/// platforms.
+void livekit_ffi_set_force_sw_h264(bool force);
+
 }  // extern "C"
 
 #endif  // livekit_ffi
