@@ -25,9 +25,18 @@
 
 namespace livekit {
 
+// Returns true if the first HW H264 encoder found on this device is on the
+// SW-fallback blocklist (known to produce non-standard SPS NALs at runtime).
+// Call this once at application startup to decide the force_sw_h264 flag
+// passed to create_peer_connection_factory().
+bool AndroidH264NeedsSwFallback();
+
 class AndroidVideoEncoderFactory : public webrtc::VideoEncoderFactory {
  public:
-  AndroidVideoEncoderFactory();
+  // force_sw_h264: when true, H264 is always encoded via the SW MediaCodec
+  // encoder (c2.android.avc.encoder) instead of the HW encoder.  Callers
+  // determine this flag by calling AndroidH264NeedsSwFallback() at startup.
+  explicit AndroidVideoEncoderFactory(bool force_sw_h264 = false);
   ~AndroidVideoEncoderFactory() override;
 
   std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override;
@@ -48,8 +57,11 @@ class AndroidVideoEncoderFactory : public webrtc::VideoEncoderFactory {
   const std::unique_ptr<webrtc::VideoEncoderFactory> m_builtinEncoderFactory;
   std::unique_ptr<webrtc::VideoEncoderFactory> m_hwEncoderFactory;
   std::unique_ptr<webrtc::VideoEncoderFactory> m_swEncoderFactory;
+  // Non-null when force_sw_h264=true — SW MediaCodec H264 encoder factory.
+  std::unique_ptr<webrtc::VideoEncoderFactory> m_swH264EncoderFactory;
 };
 
-std::unique_ptr<webrtc::VideoEncoderFactory> CreateAndroidVideoEncoderFactory();
+std::unique_ptr<webrtc::VideoEncoderFactory> CreateAndroidVideoEncoderFactory(
+    bool force_sw_h264 = false);
 
 }  // namespace livekit

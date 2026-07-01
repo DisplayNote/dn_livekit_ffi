@@ -19,6 +19,15 @@ use crate::{
     rtp_parameters::RtpCapabilities, MediaType, RtcError,
 };
 
+/// Returns `true` if the first HW H264 encoder on this Android device is on
+/// the SW-fallback blocklist.  Always returns `false` on non-Android platforms.
+///
+/// Call once at application startup and pass the result as `force_sw_h264` to
+/// [`PeerConnectionFactory::new()`].
+pub fn android_h264_needs_sw_fallback() -> bool {
+    imp_pcf::android_h264_needs_sw_fallback()
+}
+
 #[derive(Debug, Clone)]
 pub struct IceServer {
     pub urls: Vec<String>,
@@ -68,6 +77,16 @@ impl Debug for PeerConnectionFactory {
 }
 
 impl PeerConnectionFactory {
+    /// Creates a PeerConnectionFactory.
+    ///
+    /// `force_sw_h264`: when `true`, H264 is always encoded via the Android SW
+    /// MediaCodec encoder instead of the HW encoder.  Determine this value by
+    /// calling [`android_h264_needs_sw_fallback()`] at startup; on non-Android
+    /// platforms the flag is ignored.
+    pub fn new(force_sw_h264: bool) -> Self {
+        Self { handle: imp_pcf::PeerConnectionFactory::new(force_sw_h264) }
+    }
+
     pub fn create_peer_connection(
         &self,
         config: RtcConfiguration,

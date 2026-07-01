@@ -40,19 +40,39 @@ pub struct PeerConnectionFactory {
     pub(crate) sys_handle: SharedPtr<sys_pcf::ffi::PeerConnectionFactory>,
 }
 
-impl Default for PeerConnectionFactory {
-    fn default() -> Self {
+impl PeerConnectionFactory {
+    /// Creates a PeerConnectionFactory.
+    ///
+    /// `force_sw_h264`: when `true`, H264 is always encoded via the Android SW
+    /// MediaCodec encoder (`c2.android.avc.encoder`) instead of the HW encoder.
+    /// Determine this value by calling [`android_h264_needs_sw_fallback()`] once
+    /// at application startup.  On non-Android platforms the flag is ignored.
+    pub fn new(force_sw_h264: bool) -> Self {
         let mut log_sink = LOG_SINK.lock();
         if log_sink.is_none() {
             *log_sink = Some(sys_rtc::ffi::new_log_sink(|msg, _| {
                 let msg = msg.strip_suffix("\r\n").or(msg.strip_suffix('\n')).unwrap_or(&msg);
-
                 log::debug!(target: "libwebrtc", "{}", msg);
             }));
         }
-
-        Self { sys_handle: sys_pcf::ffi::create_peer_connection_factory() }
+        Self { sys_handle: sys_pcf::ffi::create_peer_connection_factory(force_sw_h264) }
     }
+}
+
+impl Default for PeerConnectionFactory {
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+/// Returns `true` if the first HW H264 encoder on this Android device is on the
+/// SW-fallback blocklist (known to produce non-standard SPS NALs at runtime).
+/// Always returns `false` on non-Android platforms.
+///
+/// Call this once at application startup and pass the result as `force_sw_h264`
+/// to [`PeerConnectionFactory::new()`].
+pub fn android_h264_needs_sw_fallback() -> bool {
+    sys_pcf::ffi::android_h264_needs_sw_fallback()
 }
 
 impl PeerConnectionFactory {

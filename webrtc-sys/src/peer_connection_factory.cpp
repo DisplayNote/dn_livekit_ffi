@@ -38,6 +38,9 @@
 #include "livekit/rtp_parameters.h"
 #include "livekit/video_decoder_factory.h"
 #include "livekit/video_encoder_factory.h"
+#ifdef WEBRTC_ANDROID
+#include "livekit/android/video_encoder_factory.h"
+#endif
 #include "livekit/webrtc.h"
 #include "rtc_base/thread.h"
 #include "webrtc-sys/src/peer_connection.rs.h"
@@ -48,7 +51,7 @@ namespace livekit {
 class PeerConnectionObserver;
 
 PeerConnectionFactory::PeerConnectionFactory(
-    std::shared_ptr<RtcRuntime> rtc_runtime)
+    std::shared_ptr<RtcRuntime> rtc_runtime, bool force_sw_h264)
     : rtc_runtime_(rtc_runtime) {
   RTC_LOG(LS_VERBOSE) << "PeerConnectionFactory::PeerConnectionFactory()";
 
@@ -69,7 +72,7 @@ PeerConnectionFactory::PeerConnectionFactory(
   dependencies.adm = audio_device_;
 
   dependencies.video_encoder_factory =
-      std::move(std::make_unique<livekit::VideoEncoderFactory>());
+      std::move(std::make_unique<livekit::VideoEncoderFactory>(force_sw_h264));
   dependencies.video_decoder_factory =
       std::move(std::make_unique<livekit::VideoDecoderFactory>());
   dependencies.audio_encoder_factory = webrtc::CreateBuiltinAudioEncoderFactory();
@@ -140,8 +143,18 @@ RtpCapabilities PeerConnectionFactory::rtp_receiver_capabilities(
       static_cast<webrtc::MediaType>(type)));
 }
 
-std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory() {
-  return std::make_shared<PeerConnectionFactory>(RtcRuntime::create());
+std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory(
+    bool force_sw_h264) {
+  return std::make_shared<PeerConnectionFactory>(RtcRuntime::create(),
+                                                 force_sw_h264);
+}
+
+bool android_h264_needs_sw_fallback() {
+#ifdef WEBRTC_ANDROID
+  return AndroidH264NeedsSwFallback();
+#else
+  return false;
+#endif
 }
 
 }  // namespace livekit

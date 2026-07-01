@@ -41,7 +41,8 @@ webrtc::PeerConnectionInterface::RTCConfiguration to_native_rtc_configuration(
 
 class PeerConnectionFactory {
  public:
-  explicit PeerConnectionFactory(std::shared_ptr<RtcRuntime> rtc_runtime);
+  explicit PeerConnectionFactory(std::shared_ptr<RtcRuntime> rtc_runtime,
+                                 bool force_sw_h264 = false);
   ~PeerConnectionFactory();
 
   std::shared_ptr<PeerConnection> create_peer_connection(
@@ -69,5 +70,12 @@ class PeerConnectionFactory {
   webrtc::TaskQueueFactory* task_queue_factory_;
 };
 
-std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory();
+std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory(
+    bool force_sw_h264 = false);
+
+// Returns true if the first HW H264 encoder on this Android device is on the
+// SW-fallback blocklist.  Always returns false on non-Android platforms.
+// Call this once at application startup; pass the result as force_sw_h264 to
+// create_peer_connection_factory().
+bool android_h264_needs_sw_fallback();
 }  // namespace livekit

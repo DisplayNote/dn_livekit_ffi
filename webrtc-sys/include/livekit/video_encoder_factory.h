@@ -23,7 +23,7 @@ namespace livekit {
 class VideoEncoderFactory : public webrtc::VideoEncoderFactory {
   class InternalFactory : public webrtc::VideoEncoderFactory {
    public:
-    InternalFactory();
+    explicit InternalFactory(bool force_sw_h264 = false);
 
     std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override;
 
@@ -39,7 +39,7 @@ class VideoEncoderFactory : public webrtc::VideoEncoderFactory {
   };
 
  public:
-  VideoEncoderFactory();
+  explicit VideoEncoderFactory(bool force_sw_h264 = false);
 
   std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override;
 
