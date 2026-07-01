@@ -24,7 +24,7 @@ use lazy_static::lazy_static;
 use libwebrtc::prelude::*;
 use parking_lot::Mutex;
 
-// Set by livekit_ffi_probe_android_h264() before the first room connection.
+// Set by livekit_ffi_set_force_sw_h264() before the first room connection.
 // LkRuntime reads this once when creating PeerConnectionFactory.
 static FORCE_SW_H264: AtomicBool = AtomicBool::new(false);
 

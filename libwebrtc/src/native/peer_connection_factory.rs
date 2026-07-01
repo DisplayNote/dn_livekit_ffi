@@ -65,16 +65,6 @@ impl Default for PeerConnectionFactory {
     }
 }
 
-/// Returns `true` if the first HW H264 encoder on this Android device is on the
-/// SW-fallback blocklist (known to produce non-standard SPS NALs at runtime).
-/// Always returns `false` on non-Android platforms.
-///
-/// Call this once at application startup and pass the result as `force_sw_h264`
-/// to [`PeerConnectionFactory::new()`].
-pub fn android_h264_needs_sw_fallback() -> bool {
-    sys_pcf::ffi::android_h264_needs_sw_fallback()
-}
-
 impl PeerConnectionFactory {
     pub fn create_peer_connection(
         &self,

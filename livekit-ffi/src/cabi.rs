@@ -94,26 +94,6 @@ pub extern "C" fn livekit_ffi_drop_handle(handle_id: FfiHandleId) -> bool {
     FFI_SERVER.drop_handle(handle_id)
 }
 
-/// Probes whether the Android HW H264 encoder is on the SW-fallback blocklist,
-/// stores the result, and returns it.  The result is read by `LkRuntime` when
-/// it creates its `PeerConnectionFactory` on the first room connection.
-///
-/// Must be called after WebRTC JNI initialization and before the first room
-/// connection.  On non-Android platforms always returns false.
-#[no_mangle]
-pub extern "C" fn livekit_ffi_probe_android_h264() -> bool {
-    #[cfg(target_os = "android")]
-    {
-        let needs_sw =
-            livekit::webrtc::peer_connection_factory::android_h264_needs_sw_fallback();
-        livekit::set_force_sw_h264(needs_sw);
-        log::info!("livekit_ffi_probe_android_h264: force_sw_h264={}", needs_sw);
-        needs_sw
-    }
-    #[cfg(not(target_os = "android"))]
-    false
-}
-
 /// Explicitly sets whether the SW H264 encoder should be used instead of HW.
 /// The application calls this before the first room connection based on its
 /// own device/chipset policy.  On non-Android platforms this is a no-op.

@@ -120,41 +120,7 @@ std::unique_ptr<webrtc::VideoEncoderFactory> CreateSoftwareVideoEncoderFactory()
   return webrtc::JavaToNativeVideoEncoderFactory(env, encoder_factory);
 }
 
-// Calls HardwareVideoEncoderFactory.findNonCompliantHardwareH264EncoderName() via JNI.
-// Returns the encoder name (non-empty) if the first HW H264 encoder is on the blocklist,
-// or empty string if the encoder is compliant or no HW H264 encoder is present.
-std::string GetNonCompliantHardwareH264EncoderName() {
-  JNIEnv* env = webrtc::AttachCurrentThreadIfNeeded();
-  webrtc::ScopedJavaLocalRef<jclass> factory_class =
-      webrtc::GetClass(env, "livekit/org/webrtc/HardwareVideoEncoderFactory");
-  if (!factory_class.obj()) return "";
-
-  jmethodID method = env->GetStaticMethodID(
-      factory_class.obj(), "findNonCompliantHardwareH264EncoderName",
-      "()Ljava/lang/String;");
-  if (!method) {
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    RTC_LOG(LS_WARNING) << "findNonCompliantHardwareH264EncoderName not found "
-                           "— libwebrtc.jar may be stale; assuming HW encoder is compliant";
-    return "";
-  }
-
-  jstring name_jstr = static_cast<jstring>(
-      env->CallStaticObjectMethod(factory_class.obj(), method));
-  if (!name_jstr) return "";
-
-  const char* chars = env->GetStringUTFChars(name_jstr, nullptr);
-  std::string name(chars);
-  env->ReleaseStringUTFChars(name_jstr, chars);
-  return name;
-}
-
 }  // namespace
-
-// Public probe function — the application calls this once at startup.
-bool AndroidH264NeedsSwFallback() {
-  return !GetNonCompliantHardwareH264EncoderName().empty();
-}
 
 // AndroidVideoEncoderFactory implementation
 AndroidVideoEncoderFactory::AndroidVideoEncoderFactory(bool force_sw_h264)

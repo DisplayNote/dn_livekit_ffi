@@ -5,7 +5,7 @@
    private final boolean enableH264HighProfile;
    @Nullable private final Predicate<MediaCodecInfo> codecAllowedPredicate;
 +  private final boolean allowSoftwareCodecs;
- 
+
    /**
     * Creates a HardwareVideoEncoderFactory that supports surface texture encoding.
 @@ -59,7 +60,7 @@
@@ -15,7 +15,7 @@
 -        /* codecAllowedPredicate= */ null);
 +        /* codecAllowedPredicate= */ null, /* allowSoftwareCodecs= */ false);
    }
- 
+
    /**
 @@ -74,6 +75,13 @@
     */
@@ -31,63 +31,20 @@
      // Texture mode requires EglBase14.
      if (sharedContext instanceof EglBase14.Context) {
        this.sharedContext = (EglBase14.Context) sharedContext;
-@@ -84,6 +92,50 @@
+@@ -84,6 +92,7 @@
      this.enableIntelVp8Encoder = enableIntelVp8Encoder;
      this.enableH264HighProfile = enableH264HighProfile;
      this.codecAllowedPredicate = codecAllowedPredicate;
 +    this.allowSoftwareCodecs = allowSoftwareCodecs;
-+  }
-+
-+  /**
-+   * Returns the codec name of the first HW H264 encoder if it is on the SW-fallback blocklist
-+   * (known to produce SPS NALs with a hardcoded level that breaks client decoders when the SDP
-+   * negotiated Level 3.1), or {@code null} if the encoder appears compliant or no HW H264 encoder
-+   * is found.
-+   */
-+  @Nullable
-+  public static String findNonCompliantHardwareH264EncoderName() {
-+    // Encoders known to produce non-standard H264 SPS at runtime regardless of what level they
-+    // declare in profileLevels. Do not use a capability check here — many compliant encoders
-+    // (e.g. Qualcomm c2.qti.avc.encoder) only advertise high levels without enumerating Level 3.1.
-+    final String[] NAME_BLOCKLIST = {"OMX.realtek."};
-+
-+    final MediaCodecList list = new MediaCodecList(MediaCodecList.ALL_CODECS);
-+    for (MediaCodecInfo info : list.getCodecInfos()) {
-+      if (info == null || !info.isEncoder()) continue;
-+      if (!MediaCodecUtils.codecSupportsType(info, VideoCodecMimeType.H264)) continue;
-+
-+      // Identify hardware encoders using the same criteria as isHardwareSupportedInCurrentSdk().
-+      final boolean isHw;
-+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-+        isHw = info.isHardwareAccelerated();
-+      } else {
-+        final String n = info.getName();
-+        isHw = n.startsWith(QCOM_PREFIX) || n.startsWith(EXYNOS_PREFIX)
-+            || n.startsWith(INTEL_PREFIX);
-+      }
-+      if (!isHw) continue;
-+
-+      final String name = info.getName();
-+      for (final String prefix : NAME_BLOCKLIST) {
-+        if (name.startsWith(prefix)) {
-+          Logging.w(TAG, name + " is on SW-fallback blocklist — SW encoder will be used");
-+          return name;
-+        }
-+      }
-+
-+      // First HW H264 encoder found and not on blocklist — use it.
-+      return null;
-+    }
-+    return null;
    }
- 
+
    @Deprecated
-@@ -186,7 +238,7 @@
+@@ -186,7 +195,7 @@
    // current SDK.
    private boolean isHardwareSupportedInCurrentSdk(MediaCodecInfo info, VideoCodecMimeType type) {
      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 -      return info.isHardwareAccelerated();
 +      return allowSoftwareCodecs ? !info.isHardwareAccelerated() : info.isHardwareAccelerated();
      }
- 
+
      switch (type) {

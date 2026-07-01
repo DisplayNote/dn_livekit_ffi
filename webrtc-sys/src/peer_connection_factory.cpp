@@ -149,12 +149,5 @@ std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory(
                                                  force_sw_h264);
 }
 
-bool android_h264_needs_sw_fallback() {
-#ifdef WEBRTC_ANDROID
-  return AndroidH264NeedsSwFallback();
-#else
-  return false;
-#endif
-}
 
 }  // namespace livekit

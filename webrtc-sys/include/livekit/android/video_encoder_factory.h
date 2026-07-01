@@ -25,17 +25,10 @@
 
 namespace livekit {
 
-// Returns true if the first HW H264 encoder found on this device is on the
-// SW-fallback blocklist (known to produce non-standard SPS NALs at runtime).
-// Call this once at application startup to decide the force_sw_h264 flag
-// passed to create_peer_connection_factory().
-bool AndroidH264NeedsSwFallback();
-
 class AndroidVideoEncoderFactory : public webrtc::VideoEncoderFactory {
  public:
   // force_sw_h264: when true, H264 is always encoded via the SW MediaCodec
-  // encoder (c2.android.avc.encoder) instead of the HW encoder.  Callers
-  // determine this flag by calling AndroidH264NeedsSwFallback() at startup.
+  // encoder (c2.android.avc.encoder) instead of the HW encoder.
   explicit AndroidVideoEncoderFactory(bool force_sw_h264 = false);
   ~AndroidVideoEncoderFactory() override;
 

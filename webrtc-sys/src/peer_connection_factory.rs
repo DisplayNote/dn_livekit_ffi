@@ -87,15 +87,9 @@ pub mod ffi {
         type PeerConnection = crate::peer_connection::ffi::PeerConnection;
         type PeerConnectionFactory;
 
-        // Returns true if the first HW H264 encoder on this device is on the
-        // SW-fallback blocklist.  Always returns false on non-Android platforms.
-        // Call once at startup to determine the force_sw_h264 flag below.
-        fn android_h264_needs_sw_fallback() -> bool;
-
         // Creates a PeerConnectionFactory.
         // force_sw_h264: when true, H264 is always encoded via the SW MediaCodec
-        // encoder.  Call android_h264_needs_sw_fallback() first and pass its
-        // return value here; the library no longer auto-detects this.
+        // encoder (c2.android.avc.encoder) instead of the HW encoder.
         fn create_peer_connection_factory(
             force_sw_h264: bool,
         ) -> SharedPtr<PeerConnectionFactory>;

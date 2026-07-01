@@ -39,18 +39,12 @@ FfiHandleId livekit_ffi_request(const uint8_t *data,
 
 bool livekit_ffi_drop_handle(FfiHandleId handle_id);
 
-void livekit_ffi_dispose();
-
-/// Probes whether the Android HW H264 encoder is on the SW-fallback blocklist,
-/// stores the result, and returns it.  Must be called after WebRTC JNI
-/// initialization and before the first room connection.
-/// Always returns false on non-Android platforms.
-bool livekit_ffi_probe_android_h264();
-
 /// Explicitly sets whether the SW H264 encoder should be used instead of HW.
-/// Call before the first room connection.  Always a no-op on non-Android
-/// platforms.
+/// The application calls this before the first room connection based on its
+/// own device/chipset policy.  On non-Android platforms this is a no-op.
 void livekit_ffi_set_force_sw_h264(bool force);
+
+void livekit_ffi_dispose();
 
 }  // extern "C"
 

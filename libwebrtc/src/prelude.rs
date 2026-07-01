@@ -25,7 +25,7 @@ pub use crate::{
         PeerConnectionState, SignalingState,
     },
     peer_connection_factory::{
-        android_h264_needs_sw_fallback, ContinualGatheringPolicy, IceServer, IceTransportsType,
+        ContinualGatheringPolicy, IceServer, IceTransportsType,
         PeerConnectionFactory, RtcConfiguration,
     },
     rtp_parameters::*,
