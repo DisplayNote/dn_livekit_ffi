@@ -1,19 +1,14 @@
-diff --git a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
 --- a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
 +++ b/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
-@@ -47,6 +47,11 @@
+@@ -47,6 +47,7 @@
    private final boolean enableIntelVp8Encoder;
    private final boolean enableH264HighProfile;
    @Nullable private final Predicate<MediaCodecInfo> codecAllowedPredicate;
-+  // When true, isSupportedCodec() selects software-only MediaCodec encoders (those where
-+  // isHardwareAccelerated() == false) instead of hardware-only ones.  Used to force a SW H264
-+  // encoder (e.g. OMX.google.h264.encoder) on devices whose HW encoder produces output that
-+  // clients cannot decode.
 +  private final boolean allowSoftwareCodecs;
  
    /**
     * Creates a HardwareVideoEncoderFactory that supports surface texture encoding.
-@@ -59,7 +64,7 @@
+@@ -59,7 +60,7 @@
    public HardwareVideoEncoderFactory(
        EglBase.Context sharedContext, boolean enableIntelVp8Encoder, boolean enableH264HighProfile) {
      this(sharedContext, enableIntelVp8Encoder, enableH264HighProfile,
@@ -22,7 +17,7 @@ diff --git a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/a
    }
  
    /**
-@@ -74,6 +79,27 @@
+@@ -74,6 +75,13 @@
     */
    public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
        boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate) {
@@ -30,27 +25,13 @@ diff --git a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/a
 +        /* allowSoftwareCodecs= */ false);
 +  }
 +
-+  /**
-+   * Creates a HardwareVideoEncoderFactory that can optionally select software MediaCodec encoders.
-+   *
-+   * <p>When {@code allowSoftwareCodecs} is {@code true} the factory selects software MediaCodec
-+   * encoders (those where {@link MediaCodecInfo#isHardwareAccelerated()} returns {@code false})
-+   * instead of hardware-accelerated ones.  Used to force a SW H264 encoder on devices whose HW
-+   * encoder produces output that remote clients cannot decode.
-+   *
-+   * @param sharedContext may be null.
-+   * @param enableIntelVp8Encoder true if Intel VP8 encoder is enabled.
-+   * @param enableH264HighProfile true if H264 High Profile is enabled.
-+   * @param codecAllowedPredicate optional predicate to filter codecs; null means allow all.
-+   * @param allowSoftwareCodecs when true, selects SW (non-hardware-accelerated) codecs.
-+   */
 +  public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
 +      boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate,
 +      boolean allowSoftwareCodecs) {
      // Texture mode requires EglBase14.
      if (sharedContext instanceof EglBase14.Context) {
        this.sharedContext = (EglBase14.Context) sharedContext;
-@@ -84,6 +110,82 @@
+@@ -84,6 +92,50 @@
      this.enableIntelVp8Encoder = enableIntelVp8Encoder;
      this.enableH264HighProfile = enableH264HighProfile;
      this.codecAllowedPredicate = codecAllowedPredicate;
@@ -58,24 +39,16 @@ diff --git a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/a
 +  }
 +
 +  /**
-+   * Returns the codec name of the first HW H264 encoder if it is detected as non-compliant
-+   * (likely to produce output that remote clients cannot decode), or {@code null} if the encoder
-+   * appears compliant or no HW H264 encoder is found.
-+   *
-+   * <p>Non-compliance is determined by two checks, either of which is sufficient:
-+   * <ol>
-+   *   <li><b>Capability check (primary)</b>: the encoder's declared {@code profileLevels} do not
-+   *       include H264 Level 3.1 or lower.  Encoders that only claim Level 4+ capability are
-+   *       likely to embed a non-standard level in every SPS NAL, causing client decoders to
-+   *       reject IDR frames when the SDP negotiated Level 3.1.
-+   *   <li><b>Name blocklist (secondary)</b>: the codec name starts with a known-bad vendor prefix
-+   *       (e.g. {@code OMX.realtek.}).  Catches encoders that claim Level 3.1 capability in their
-+   *       {@code profileLevels} but still produce Level 4 SPS headers at runtime.
-+   * </ol>
++   * Returns the codec name of the first HW H264 encoder if it is on the SW-fallback blocklist
++   * (known to produce SPS NALs with a hardcoded level that breaks client decoders when the SDP
++   * negotiated Level 3.1), or {@code null} if the encoder appears compliant or no HW H264 encoder
++   * is found.
 +   */
 +  @Nullable
 +  public static String findNonCompliantHardwareH264EncoderName() {
-+    // Encoders known to produce non-standard H264 SPS even when they claim Level 3.1 capability.
++    // Encoders known to produce non-standard H264 SPS at runtime regardless of what level they
++    // declare in profileLevels. Do not use a capability check here — many compliant encoders
++    // (e.g. Qualcomm c2.qti.avc.encoder) only advertise high levels without enumerating Level 3.1.
 +    final String[] NAME_BLOCKLIST = {"OMX.realtek."};
 +
 +    final MediaCodecList list = new MediaCodecList(MediaCodecList.ALL_CODECS);
@@ -95,30 +68,6 @@ diff --git a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/a
 +      if (!isHw) continue;
 +
 +      final String name = info.getName();
-+
-+      // Primary check: if the encoder does not declare Level 3.1 or lower in profileLevels it
-+      // will likely embed a non-standard level in SPS NALs, breaking client decode.
-+      boolean capabilityCompliant = false;
-+      try {
-+        final MediaCodecInfo.CodecCapabilities caps = info.getCapabilitiesForType("video/avc");
-+        for (MediaCodecInfo.CodecProfileLevel pl : caps.profileLevels) {
-+          if (pl.level <= MediaCodecInfo.CodecProfileLevel.AVCLevel31) {
-+            capabilityCompliant = true;
-+            break;
-+          }
-+        }
-+      } catch (Exception e) {
-+        // Query failure — treat conservatively as non-compliant.
-+        Logging.w(TAG, "Cannot query H264 capabilities of " + name + ": " + e.getMessage());
-+      }
-+
-+      if (!capabilityCompliant) {
-+        Logging.w(TAG, name + " does not declare H264 Level 3.1 support — SW encoder will be used");
-+        return name;
-+      }
-+
-+      // Secondary check: name-based blocklist for encoders that claim Level 3.1 capability
-+      // but produce Level 4 SPS at runtime.
 +      for (final String prefix : NAME_BLOCKLIST) {
 +        if (name.startsWith(prefix)) {
 +          Logging.w(TAG, name + " is on SW-fallback blocklist — SW encoder will be used");
@@ -126,23 +75,15 @@ diff --git a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/a
 +        }
 +      }
 +
-+      // First HW H264 encoder found and passed both checks — use it.
++      // First HW H264 encoder found and not on blocklist — use it.
 +      return null;
 +    }
 +    return null;
    }
  
    @Deprecated
-@@ -182,11 +284,13 @@
-     return isHardwareSupportedInCurrentSdk(info, type) && isMediaCodecAllowed(info);
-   }
- 
--  // Returns true if the given MediaCodecInfo indicates a hardware module that is supported on the
--  // current SDK.
-+  // Returns true if the given MediaCodecInfo indicates a module that is supported on the current
-+  // SDK.  When allowSoftwareCodecs is true the logic is inverted on Android Q+: only codecs where
-+  // isHardwareAccelerated() is false are accepted, directing findCodecForType() to the SW MediaCodec
-+  // H264 encoder (e.g. OMX.google.h264.encoder) instead of the HW one.
+@@ -186,7 +238,7 @@
+   // current SDK.
    private boolean isHardwareSupportedInCurrentSdk(MediaCodecInfo info, VideoCodecMimeType type) {
      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 -      return info.isHardwareAccelerated();
