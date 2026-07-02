@@ -60,8 +60,19 @@ std::unique_ptr<webrtc::VideoEncoderFactory> CreateHardwareVideoEncoderFactory()
 
   jmethodID ctor = env->GetMethodID(factory_class.obj(), "<init>",
                                     "(Llivekit/org/webrtc/EglBase$Context;ZZ)V");
+  if (!ctor) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "HardwareVideoEncoderFactory ctor not found";
+    return nullptr;
+  }
+
   jobject encoder_factory =
       env->NewObject(factory_class.obj(), ctor, nullptr, true, false);
+  if (!encoder_factory) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "Failed to instantiate HardwareVideoEncoderFactory";
+    return nullptr;
+  }
   return webrtc::JavaToNativeVideoEncoderFactory(env, encoder_factory);
 }
 
@@ -117,7 +128,18 @@ std::unique_ptr<webrtc::VideoEncoderFactory> CreateSoftwareVideoEncoderFactory()
   }
 
   jmethodID ctor = env->GetMethodID(factory_class.obj(), "<init>", "()V");
+  if (!ctor) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "SoftwareVideoEncoderFactory ctor not found";
+    return nullptr;
+  }
+
   jobject encoder_factory = env->NewObject(factory_class.obj(), ctor);
+  if (!encoder_factory) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "Failed to instantiate SoftwareVideoEncoderFactory";
+    return nullptr;
+  }
   return webrtc::JavaToNativeVideoEncoderFactory(env, encoder_factory);
 }
 
@@ -200,9 +222,10 @@ AndroidVideoEncoderFactory::GetSupportedFormats() const {
 
   EnsureH264InSupportedFormats(formats);
 
+  // Sort by (name, parameters) so same-codec variants are adjacent for unique().
   std::sort(formats.begin(), formats.end(),
             [](const webrtc::SdpVideoFormat& a, const webrtc::SdpVideoFormat& b) {
-              return a.name < b.name;
+              return a.name < b.name || (a.name == b.name && a.parameters < b.parameters);
             });
   formats.erase(std::unique(formats.begin(), formats.end(),
                             [](const webrtc::SdpVideoFormat& a,
