@@ -70,10 +70,11 @@ impl Debug for PeerConnectionFactory {
 impl PeerConnectionFactory {
     /// Creates a PeerConnectionFactory.
     ///
-    /// `force_sw_h264`: when `true`, H264 is always encoded via the Android SW
-    /// MediaCodec encoder instead of the HW encoder.  The caller is responsible
-    /// for determining this value based on device/chipset policy.  On non-Android
-    /// platforms the flag is ignored.
+    /// `force_sw_h264`: when `true`, H264 encoding prefers the Android SW MediaCodec
+    /// encoder over the HW encoder.  Best-effort: falls back to HW if the SW factory
+    /// cannot be created (e.g., stale jar), and effective on API 29+ only.  The caller
+    /// is responsible for the device/chipset policy decision.  On non-Android platforms
+    /// the flag is ignored.
     pub fn new(force_sw_h264: bool) -> Self {
         Self { handle: imp_pcf::PeerConnectionFactory::new(force_sw_h264) }
     }

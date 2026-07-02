@@ -27,8 +27,10 @@ namespace livekit {
 
 class AndroidVideoEncoderFactory : public webrtc::VideoEncoderFactory {
  public:
-  // force_sw_h264: when true, H264 is always encoded via the SW MediaCodec
-  // encoder (c2.android.avc.encoder) instead of the HW encoder.
+  // force_sw_h264: when true, H264 encoding prefers the SW MediaCodec encoder
+  // (c2.android.avc.encoder) over the HW encoder.  Best-effort: falls back to
+  // HW if the SW factory cannot be created (e.g., stale jar / missing ctor).
+  // Effective on API 29+ only; on earlier APIs HW may still be selected.
   explicit AndroidVideoEncoderFactory(bool force_sw_h264 = false);
   ~AndroidVideoEncoderFactory() override;
 

@@ -43,10 +43,11 @@ pub struct PeerConnectionFactory {
 impl PeerConnectionFactory {
     /// Creates a PeerConnectionFactory.
     ///
-    /// `force_sw_h264`: when `true`, H264 is always encoded via the Android SW
-    /// MediaCodec encoder (`c2.android.avc.encoder`) instead of the HW encoder.
-    /// The caller is responsible for determining this value based on device/chipset
-    /// policy.  On non-Android platforms the flag is ignored.
+    /// `force_sw_h264`: when `true`, H264 encoding prefers the Android SW MediaCodec
+    /// encoder (`c2.android.avc.encoder`) over the HW encoder.  Best-effort: falls
+    /// back to HW if the SW factory cannot be created (e.g., stale jar), and effective
+    /// on API 29+ only.  The caller is responsible for the device/chipset policy
+    /// decision.  On non-Android platforms the flag is ignored.
     pub fn new(force_sw_h264: bool) -> Self {
         let mut log_sink = LOG_SINK.lock();
         if log_sink.is_none() {
@@ -122,6 +123,16 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let factory = PeerConnectionFactory::default();
+        let source = NativeVideoSource::default();
+        let _track = factory.create_video_track("test", source);
+        drop(factory);
+    }
+
+    #[tokio::test]
+    async fn test_peer_connection_factory_force_sw_h264() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let factory = PeerConnectionFactory::new(true);
         let source = NativeVideoSource::default();
         let _track = factory.create_video_track("test", source);
         drop(factory);
