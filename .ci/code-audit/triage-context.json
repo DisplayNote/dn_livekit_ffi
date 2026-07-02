@@ -1,0 +1,5 @@
+{
+  "_comment": "Repo files documenting deliberate, security-reviewed decisions. The auditor (code-audit run) is blind to some of these (its walker skips dotfiles and docs/ is excluded), so it may raise findings for risks these files already mitigate or intentionally accept. The triage step (triage_agent.py) feeds their contents to the model so it suppresses/down-rates those false positives before filing a Bug. Paths are repo-root-relative. Populate context_files as the repo grows security-decision docs. Override at runtime with env TRIAGE_REPO_CONTEXT (comma-separated) / TRIAGE_REPO_CONTEXT_MAX_LINES.",
+  "context_files": [],
+  "max_lines": 400
+}

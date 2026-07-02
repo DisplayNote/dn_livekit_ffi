@@ -1,0 +1,134 @@
+# code-audit-pipeline.yml — portable template (roadmap 2.22)
+# ---------------------------------------------------------------------------
+# Scheduled, agent-triaged security code audit for an Azure DevOps project.
+# Decoupled from build pipelines: Linux agent, never gates a merge.
+#
+# Copy this file + triage_agent.py + ian-security-audit-interpreter.md into your
+# repo under  .ci/code-audit/  (any path is fine — keep it in sync with the two
+# `python .ci/code-audit/...` lines below). Then follow SETUP.md.
+# ---------------------------------------------------------------------------
+
+trigger: none # never run on push/PR
+pr: none
+
+schedules:
+  - cron: '0 6 1 */3 *' # 06:00 UTC, 1st of every 3rd month (quarterly). Adjust cadence.
+    displayName: 'Quarterly code-audit'
+    branches:
+      include:
+        [main] # your integration branch. Schedules are ONLY read
+        #       from the YAML on the repo's DEFAULT branch.
+    always: true # run even with no new commits
+
+variables:
+  - group: web-code-audit-secrets # shared Broadcast project variable group (ANTHROPIC_API_KEY, GITHUB_PAT)
+  - name: codeAuditRepo
+    value: 'github.com/DisplayNote/code-audit.git' # the framework repo
+  - name: codeAuditRef
+    value: 'master' # always track the framework's default branch
+  - name: maxBudgetUsd
+    value: '54' # ~€50 cap for the audit (the cost driver). Tune per repo size.
+  - name: adoAreaPath
+    value: 'Broadcast' # the Area Path new Bugs are filed under (e.g. 'MyProject')
+  - name: severityFloor
+    value: 'High' # informational; the agent enforces Critical+High
+
+pool:
+  vmImage: ubuntu-latest # the audit only needs Python — do NOT use a heavy build pool
+
+jobs:
+  - job: code_audit
+    timeoutInMinutes: 120
+    steps:
+      - checkout: self
+        fetchDepth: 0 # full history (needed if you enable the 'team' genre later)
+        persistCredentials: true # keep git auth on the remote so 'git fetch origin' works after checkout
+
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.12'
+        displayName: 'Use Python 3.12'
+
+      - script: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          # GITHUB_PAT only needed if the framework repo is private.
+          pip install "code-audit[anthropic] @ git+https://$(GITHUB_PAT)@$(codeAuditRepo)@$(codeAuditRef)"
+          pip install anthropic requests
+          code-audit --version
+        displayName: 'Install code-audit + triage deps'
+
+      - script: |
+          set -euo pipefail
+          code-audit run --adapter anthropic-api --genres security --max-budget-usd $(maxBudgetUsd)
+        env:
+          ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+        displayName: 'Run code-audit (security genre)'
+
+      - script: |
+          set -euo pipefail
+          LATEST="$(ls -d audits/*/ | sort | tail -1)"
+          echo "Triaging audit dir: $LATEST"
+          python .ci/code-audit/triage_agent.py \
+            --audit-dir "$LATEST" \
+            --ian-prompt .ci/code-audit/ian-security-audit-interpreter.md \
+            --severity-floor "$(severityFloor)" \
+            --ado-org "$(System.CollectionUri)" \
+            --ado-project "$(System.TeamProject)" \
+            --area-path "$(adoAreaPath)"
+        env:
+          ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken) # ADO REST auth for work-item creation
+          # TRIAGE_EXTRA_FIELDS: '{"/fields/Custom.X":"value"}'  # only if your Bug process needs extra required picklists
+        displayName: 'Agent triage -> create Bugs (Critical/High)'
+
+      # Push the audit results to a dedicated branch on GitHub (no PR — opening a
+      # PR triggers noisy automated reviews; this runs quarterly, so a human pulls
+      # the branch and merges it to main manually). Uses GITHUB_PAT for the push,
+      # since System.AccessToken does not authenticate against GitHub. Runs after
+      # triage so the commit also captures ian-interpretation.md, and always()
+      # ensures the reports survive a triage error.
+      - script: |
+          set -euo pipefail
+          AUDIT_DIR="$(ls -d audits/*/ 2>/dev/null | sort | tail -1 || true)"
+          if [ -z "$AUDIT_DIR" ]; then
+            echo "No audits/ output found — nothing to commit."
+            exit 0
+          fi
+          AUDIT_DATE="$(basename "$AUDIT_DIR")" # the yyyy-mm-dd folder produced by code-audit
+          BRANCH="code-audit/$AUDIT_DATE-$(Build.BuildId)"
+          echo "Pushing audit results audits/$AUDIT_DATE to branch $BRANCH"
+
+          git config user.name "DisplayNote code-audit"
+          git config user.email "noreply@displaynote.com"
+
+          # Scheduled builds check out a detached HEAD; branch off main's tip.
+          git fetch origin main
+          git checkout -B "$BRANCH" origin/main
+
+          git add audits/
+          if git diff --cached --quiet; then
+            echo "No new audit files to commit."
+            exit 0
+          fi
+          git commit -m "chore(code-audit): add audit results $AUDIT_DATE"
+
+          # Push over HTTPS with the GitHub PAT (Build.Repository.Name is 'owner/repo').
+          # GITHUB_PAT is a secret, so it must be read from the env — Azure DevOps
+          # does NOT expand $(secret) macros inside inline scripts.
+          git push "https://${GITHUB_PAT}@github.com/$(Build.Repository.Name).git" "HEAD:refs/heads/$BRANCH"
+          echo "Done. Merge $BRANCH into main manually when ready."
+        env:
+          GITHUB_PAT: $(GITHUB_PAT) # map the secret into the script's environment
+        condition: always()
+        displayName: 'Push audit results to a branch (GitHub)'
+
+      # Publish last so the artifact also captures ian-interpretation.md, and
+      # always() ensures reports survive even if triage errors.
+      - task: PublishPipelineArtifact@1
+        condition: always()
+        inputs:
+          targetPath: audits/
+          artifactName: 'code-audit-$(Build.BuildId)'
+          publishLocation: 'pipeline'
+        displayName: 'Publish audit reports'
