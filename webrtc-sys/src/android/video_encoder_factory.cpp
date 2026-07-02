@@ -19,7 +19,6 @@
 #include <jni.h>
 
 #include <algorithm>
-#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -79,6 +78,8 @@ std::unique_ptr<webrtc::VideoEncoderFactory> CreateHardwareVideoEncoderFactory()
 // Creates a HardwareVideoEncoderFactory(null, false, false, null, allowSoftwareCodecs=true),
 // which inverts the isHardwareAccelerated() check so only SW MediaCodec codecs are selected
 // (e.g. c2.android.avc.encoder).  These produce standard H264 Baseline Level 3.1.
+// Note: allowSoftwareCodecs is only effective on API 29+ (Android 10+); on earlier APIs
+// the Java factory may still select hardware encoders.  All current target devices qualify.
 std::unique_ptr<webrtc::VideoEncoderFactory> CreateSoftwareH264VideoEncoderFactory() {
   JNIEnv* env = webrtc::AttachCurrentThreadIfNeeded();
   webrtc::ScopedJavaLocalRef<jclass> factory_class =
