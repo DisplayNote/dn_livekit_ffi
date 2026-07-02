@@ -39,7 +39,7 @@
    }
 
    @Deprecated
-@@ -186,7 +195,7 @@
+@@ -186,7 +195,10 @@
    // current SDK.
 +  // Note: allowSoftwareCodecs is only effective on API 29+ (Android 10 / Q) where
 +  // isHardwareAccelerated() is available. On earlier APIs the switch(type) path below
