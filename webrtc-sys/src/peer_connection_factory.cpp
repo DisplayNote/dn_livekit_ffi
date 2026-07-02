@@ -69,9 +69,9 @@ PeerConnectionFactory::PeerConnectionFactory(
   dependencies.adm = audio_device_;
 
   dependencies.video_encoder_factory =
-      std::move(std::make_unique<livekit::VideoEncoderFactory>(force_sw_h264));
+      std::make_unique<livekit::VideoEncoderFactory>(force_sw_h264);
   dependencies.video_decoder_factory =
-      std::move(std::make_unique<livekit::VideoDecoderFactory>());
+      std::make_unique<livekit::VideoDecoderFactory>();
   dependencies.audio_encoder_factory = webrtc::CreateBuiltinAudioEncoderFactory();
   dependencies.audio_decoder_factory = webrtc::CreateBuiltinAudioDecoderFactory();
   dependencies.audio_processing = webrtc::BuiltinAudioProcessingBuilder()
