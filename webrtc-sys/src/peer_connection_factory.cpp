@@ -38,9 +38,6 @@
 #include "livekit/rtp_parameters.h"
 #include "livekit/video_decoder_factory.h"
 #include "livekit/video_encoder_factory.h"
-#ifdef WEBRTC_ANDROID
-#include "livekit/android/video_encoder_factory.h"
-#endif
 #include "livekit/webrtc.h"
 #include "rtc_base/thread.h"
 #include "webrtc-sys/src/peer_connection.rs.h"

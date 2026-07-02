@@ -170,7 +170,7 @@ AndroidVideoEncoderFactory::AndroidVideoEncoderFactory(bool force_sw_h264)
     }
   } else {
     RTC_LOG(LS_INFO) << "AndroidVideoEncoderFactory: force_sw_h264=false "
-                        "— HW H264 encoder will be used";
+                        "— HW H264 encoder preferred (x264/SW fallback if unavailable)";
   }
 }
 
