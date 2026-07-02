@@ -220,7 +220,12 @@ AndroidVideoEncoderFactory::GetSupportedFormats() const {
     formats.insert(formats.end(), builtin_formats.begin(), builtin_formats.end());
   }
 
-  EnsureH264InSupportedFormats(formats);
+  // Skip synthetic H264 injection when the SW factory is active — it already
+  // advertises its own H264 formats, and Create() never falls back to HW/x264
+  // for H264 in that mode, so a synthetic entry could negotiate an unencodable format.
+  if (!m_swH264EncoderFactory) {
+    EnsureH264InSupportedFormats(formats);
+  }
 
   // Sort by (name, parameters) so same-codec variants are adjacent for unique().
   std::sort(formats.begin(), formats.end(),
