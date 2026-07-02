@@ -96,7 +96,7 @@ pub extern "C" fn livekit_ffi_drop_handle(handle_id: FfiHandleId) -> bool {
 
 /// Explicitly sets whether the SW H264 encoder should be used instead of HW.
 /// The application calls this before the first room connection based on its
-/// own device/chipset policy.  On non-Android platforms this is a no-op.
+/// own device/chipset policy.  On non-Android platforms the flag is ignored.
 #[no_mangle]
 pub extern "C" fn livekit_ffi_set_force_sw_h264(force: bool) {
     livekit::set_force_sw_h264(force);

@@ -45,8 +45,8 @@ impl PeerConnectionFactory {
     ///
     /// `force_sw_h264`: when `true`, H264 is always encoded via the Android SW
     /// MediaCodec encoder (`c2.android.avc.encoder`) instead of the HW encoder.
-    /// Determine this value by calling [`android_h264_needs_sw_fallback()`] once
-    /// at application startup.  On non-Android platforms the flag is ignored.
+    /// The caller is responsible for determining this value based on device/chipset
+    /// policy.  On non-Android platforms the flag is ignored.
     pub fn new(force_sw_h264: bool) -> Self {
         let mut log_sink = LOG_SINK.lock();
         if log_sink.is_none() {

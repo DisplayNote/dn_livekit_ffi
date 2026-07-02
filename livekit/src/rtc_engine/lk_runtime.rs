@@ -29,6 +29,12 @@ use parking_lot::Mutex;
 static FORCE_SW_H264: AtomicBool = AtomicBool::new(false);
 
 pub fn set_force_sw_h264(val: bool) {
+    if LK_RUNTIME.lock().upgrade().is_some() {
+        log::warn!(
+            "set_force_sw_h264({}) called after LkRuntime was already created — flag has no effect",
+            val
+        );
+    }
     FORCE_SW_H264.store(val, Ordering::SeqCst);
 }
 

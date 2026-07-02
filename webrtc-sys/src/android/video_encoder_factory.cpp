@@ -99,6 +99,7 @@ std::unique_ptr<webrtc::VideoEncoderFactory> CreateSoftwareH264VideoEncoderFacto
       /*allowSoftwareCodecs=*/static_cast<jboolean>(true));
 
   if (!encoder_factory) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
     RTC_LOG(LS_WARNING) << "Failed to instantiate SW H264 encoder factory";
     return nullptr;
   }
@@ -136,9 +137,14 @@ AndroidVideoEncoderFactory::AndroidVideoEncoderFactory(bool force_sw_h264)
       m_hwEncoderFactory(CreateHardwareVideoEncoderFactory()),
       m_swEncoderFactory(CreateSoftwareVideoEncoderFactory()) {
   if (force_sw_h264) {
-    RTC_LOG(LS_INFO) << "AndroidVideoEncoderFactory: force_sw_h264=true "
-                        "— SW H264 encoder (c2.android.avc.encoder) will be used";
     m_swH264EncoderFactory = CreateSoftwareH264VideoEncoderFactory();
+    if (m_swH264EncoderFactory) {
+      RTC_LOG(LS_INFO) << "AndroidVideoEncoderFactory: force_sw_h264=true "
+                          "— SW H264 encoder (c2.android.avc.encoder) will be used";
+    } else {
+      RTC_LOG(LS_WARNING) << "AndroidVideoEncoderFactory: force_sw_h264=true "
+                             "but SW H264 factory unavailable — falling back to HW H264";
+    }
   } else {
     RTC_LOG(LS_INFO) << "AndroidVideoEncoderFactory: force_sw_h264=false "
                         "— HW H264 encoder will be used";

@@ -71,8 +71,8 @@ impl PeerConnectionFactory {
     /// Creates a PeerConnectionFactory.
     ///
     /// `force_sw_h264`: when `true`, H264 is always encoded via the Android SW
-    /// MediaCodec encoder instead of the HW encoder.  Determine this value by
-    /// calling [`android_h264_needs_sw_fallback()`] at startup; on non-Android
+    /// MediaCodec encoder instead of the HW encoder.  The caller is responsible
+    /// for determining this value based on device/chipset policy.  On non-Android
     /// platforms the flag is ignored.
     pub fn new(force_sw_h264: bool) -> Self {
         Self { handle: imp_pcf::PeerConnectionFactory::new(force_sw_h264) }

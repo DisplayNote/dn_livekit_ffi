@@ -37,7 +37,7 @@ pub use plugin::*;
 
 /// Configures whether the Android SW H264 encoder should be used instead of HW.
 /// Call before the first room connection (before `LkRuntime` is created).
-/// On non-Android platforms this is a no-op.
+/// On non-Android platforms the flag is ignored.
 pub fn set_force_sw_h264(val: bool) {
     rtc_engine::lk_runtime::set_force_sw_h264(val);
 }
