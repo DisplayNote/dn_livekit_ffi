@@ -64,6 +64,8 @@ VideoEncoderFactory::InternalFactory::InternalFactory(bool force_sw_h264) {
 
 #ifdef WEBRTC_ANDROID
   factories_.push_back(CreateAndroidVideoEncoderFactory(force_sw_h264));
+#else
+  (void)force_sw_h264;
 #endif
 
 #if defined(USE_NVIDIA_VIDEO_CODEC)

@@ -172,8 +172,16 @@ AndroidVideoEncoderFactory::GetSupportedFormats() const {
   std::vector<webrtc::SdpVideoFormat> formats;
 
   if (m_hwEncoderFactory) {
-    auto hw_formats = m_hwEncoderFactory->GetSupportedFormats();
-    formats.insert(formats.end(), hw_formats.begin(), hw_formats.end());
+    for (const auto& fmt : m_hwEncoderFactory->GetSupportedFormats()) {
+      // When SW H264 is forced, exclude HW H264 formats so SDP negotiation
+      // cannot select a profile only the HW encoder supports.
+      if (m_swH264EncoderFactory && IsH264Format(fmt)) continue;
+      formats.push_back(fmt);
+    }
+  }
+  if (m_swH264EncoderFactory) {
+    auto sw_h264_formats = m_swH264EncoderFactory->GetSupportedFormats();
+    formats.insert(formats.end(), sw_h264_formats.begin(), sw_h264_formats.end());
   }
   if (m_swEncoderFactory) {
     auto sw_formats = m_swEncoderFactory->GetSupportedFormats();
@@ -203,6 +211,10 @@ webrtc::VideoEncoderFactory::CodecSupport
 AndroidVideoEncoderFactory::QueryCodecSupport(
     const webrtc::SdpVideoFormat& format,
     std::optional<std::string> scalability_mode) const {
+  if (IsH264Format(format) && m_swH264EncoderFactory) {
+    return m_swH264EncoderFactory->QueryCodecSupport(format, scalability_mode);
+  }
+
   if (m_hwEncoderFactory) {
     auto support = m_hwEncoderFactory->QueryCodecSupport(format, scalability_mode);
     if (support.is_supported) return support;
@@ -229,19 +241,16 @@ AndroidVideoEncoderFactory::QueryCodecSupport(
 std::unique_ptr<webrtc::VideoEncoder> AndroidVideoEncoderFactory::Create(
     const webrtc::Environment& env,
     const webrtc::SdpVideoFormat& format) {
-  // If force_sw_h264 was set, route H264 through the SW MediaCodec encoder.
+  // When SW H264 is forced, route H264 directly to the SW factory and never
+  // fall through to HW — even if the SW factory returns null.
   if (IsH264Format(format) && m_swH264EncoderFactory) {
-    for (const auto& supported_format : m_swH264EncoderFactory->GetSupportedFormats()) {
-      if (supported_format.IsSameCodec(format)) {
-        auto encoder = m_swH264EncoderFactory->Create(env, format);
-        if (encoder) {
-          RTC_LOG(LS_INFO) << "Created SW H264 encoder (force_sw_h264) for " << format.name;
-          return encoder;
-        }
-      }
+    auto encoder = m_swH264EncoderFactory->Create(env, format);
+    if (encoder) {
+      RTC_LOG(LS_INFO) << "Created SW H264 encoder (force_sw_h264) for " << format.name;
+    } else {
+      RTC_LOG(LS_WARNING) << "SW H264 factory returned no encoder for " << format.name;
     }
-    RTC_LOG(LS_WARNING) << "SW H264 factory returned no encoder for " << format.name
-                        << " — falling through";
+    return encoder;
   }
 
   if (m_hwEncoderFactory) {
