@@ -213,12 +213,16 @@ AndroidVideoEncoderFactory::GetSupportedFormats() const {
     formats.insert(formats.end(), sw_h264_formats.begin(), sw_h264_formats.end());
   }
   if (m_swEncoderFactory) {
-    auto sw_formats = m_swEncoderFactory->GetSupportedFormats();
-    formats.insert(formats.end(), sw_formats.begin(), sw_formats.end());
+    for (const auto& fmt : m_swEncoderFactory->GetSupportedFormats()) {
+      if (m_swH264EncoderFactory && IsH264Format(fmt)) continue;
+      formats.push_back(fmt);
+    }
   }
   if (m_builtinEncoderFactory) {
-    auto builtin_formats = m_builtinEncoderFactory->GetSupportedFormats();
-    formats.insert(formats.end(), builtin_formats.begin(), builtin_formats.end());
+    for (const auto& fmt : m_builtinEncoderFactory->GetSupportedFormats()) {
+      if (m_swH264EncoderFactory && IsH264Format(fmt)) continue;
+      formats.push_back(fmt);
+    }
   }
 
   // Skip synthetic H264 injection when the SW factory is active — it already
