@@ -209,8 +209,9 @@ AndroidVideoEncoderFactory::GetSupportedFormats() const {
     }
   }
   if (m_swH264EncoderFactory) {
-    auto sw_h264_formats = m_swH264EncoderFactory->GetSupportedFormats();
-    formats.insert(formats.end(), sw_h264_formats.begin(), sw_h264_formats.end());
+    for (const auto& fmt : m_swH264EncoderFactory->GetSupportedFormats()) {
+      if (IsH264Format(fmt)) formats.push_back(fmt);
+    }
   }
   if (m_swEncoderFactory) {
     for (const auto& fmt : m_swEncoderFactory->GetSupportedFormats()) {
