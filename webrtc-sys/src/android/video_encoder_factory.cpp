@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "api/video_codecs/sdp_video_format.h"
@@ -44,9 +45,9 @@
 
 namespace livekit {
 
-// Helper function to create hardware encoder factory
-std::unique_ptr<webrtc::VideoEncoderFactory>
-CreateHardwareVideoEncoderFactory() {
+namespace {
+
+std::unique_ptr<webrtc::VideoEncoderFactory> CreateHardwareVideoEncoderFactory() {
   JNIEnv* env = webrtc::AttachCurrentThreadIfNeeded();
   webrtc::ScopedJavaLocalRef<jclass> factory_class =
       webrtc::GetClass(env, "livekit/org/webrtc/HardwareVideoEncoderFactory");
@@ -56,19 +57,68 @@ CreateHardwareVideoEncoderFactory() {
     return nullptr;
   }
 
-  jmethodID ctor =
-      env->GetMethodID(factory_class.obj(), "<init>",
-                       "(Llivekit/org/webrtc/EglBase$Context;ZZ)V");
+  jmethodID ctor = env->GetMethodID(factory_class.obj(), "<init>",
+                                    "(Llivekit/org/webrtc/EglBase$Context;ZZ)V");
+  if (!ctor) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "HardwareVideoEncoderFactory ctor not found";
+    return nullptr;
+  }
 
   jobject encoder_factory =
       env->NewObject(factory_class.obj(), ctor, nullptr, true, false);
-
+  if (!encoder_factory) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "Failed to instantiate HardwareVideoEncoderFactory";
+    return nullptr;
+  }
   return webrtc::JavaToNativeVideoEncoderFactory(env, encoder_factory);
 }
 
-// Helper function to create software encoder factory
-std::unique_ptr<webrtc::VideoEncoderFactory>
-CreateSoftwareVideoEncoderFactory() {
+// Creates a HardwareVideoEncoderFactory(null, false, false, null, allowSoftwareCodecs=true),
+// which inverts the isHardwareAccelerated() check so only SW MediaCodec codecs are selected
+// (e.g. c2.android.avc.encoder).  These produce standard H264 Baseline Level 3.1.
+// Note: allowSoftwareCodecs is only effective on API 29+ (Android 10+); on earlier APIs
+// the Java factory may still select hardware encoders.
+std::unique_ptr<webrtc::VideoEncoderFactory> CreateSoftwareH264VideoEncoderFactory() {
+  JNIEnv* env = webrtc::AttachCurrentThreadIfNeeded();
+  webrtc::ScopedJavaLocalRef<jclass> factory_class =
+      webrtc::GetClass(env, "livekit/org/webrtc/HardwareVideoEncoderFactory");
+
+  if (!factory_class.obj()) {
+    RTC_LOG(LS_WARNING) << "HardwareVideoEncoderFactory class not found (SW H264)";
+    return nullptr;
+  }
+
+  // (EglBase$Context, boolean, boolean, Predicate, boolean)
+  jmethodID ctor = env->GetMethodID(
+      factory_class.obj(), "<init>",
+      "(Llivekit/org/webrtc/EglBase$Context;ZZLlivekit/org/webrtc/Predicate;Z)V");
+
+  if (!ctor) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "5-param HardwareVideoEncoderFactory ctor not found "
+                           "— libwebrtc.jar may be stale; SW H264 factory unavailable";
+    return nullptr;
+  }
+
+  jobject encoder_factory = env->NewObject(
+      factory_class.obj(), ctor,
+      /*sharedContext=*/nullptr,
+      /*enableIntelVp8Encoder=*/static_cast<jboolean>(false),
+      /*enableH264HighProfile=*/static_cast<jboolean>(false),
+      /*codecAllowedPredicate=*/nullptr,
+      /*allowSoftwareCodecs=*/static_cast<jboolean>(true));
+
+  if (!encoder_factory) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "Failed to instantiate SW H264 encoder factory";
+    return nullptr;
+  }
+  return webrtc::JavaToNativeVideoEncoderFactory(env, encoder_factory);
+}
+
+std::unique_ptr<webrtc::VideoEncoderFactory> CreateSoftwareVideoEncoderFactory() {
   JNIEnv* env = webrtc::AttachCurrentThreadIfNeeded();
   webrtc::ScopedJavaLocalRef<jclass> factory_class =
       webrtc::GetClass(env, "livekit/org/webrtc/SoftwareVideoEncoderFactory");
@@ -79,13 +129,25 @@ CreateSoftwareVideoEncoderFactory() {
   }
 
   jmethodID ctor = env->GetMethodID(factory_class.obj(), "<init>", "()V");
-  jobject encoder_factory = env->NewObject(factory_class.obj(), ctor);
+  if (!ctor) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "SoftwareVideoEncoderFactory ctor not found";
+    return nullptr;
+  }
 
+  jobject encoder_factory = env->NewObject(factory_class.obj(), ctor);
+  if (!encoder_factory) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    RTC_LOG(LS_WARNING) << "Failed to instantiate SoftwareVideoEncoderFactory";
+    return nullptr;
+  }
   return webrtc::JavaToNativeVideoEncoderFactory(env, encoder_factory);
 }
 
+}  // namespace
+
 // AndroidVideoEncoderFactory implementation
-AndroidVideoEncoderFactory::AndroidVideoEncoderFactory()
+AndroidVideoEncoderFactory::AndroidVideoEncoderFactory(bool force_sw_h264)
     : m_builtinEncoderFactory([]() {
         using Factory = webrtc::VideoEncoderFactoryTemplate<
             webrtc::LibvpxVp8EncoderTemplateAdapter,
@@ -97,7 +159,19 @@ AndroidVideoEncoderFactory::AndroidVideoEncoderFactory()
       }()),
       m_hwEncoderFactory(CreateHardwareVideoEncoderFactory()),
       m_swEncoderFactory(CreateSoftwareVideoEncoderFactory()) {
-  RTC_LOG(LS_INFO) << "AndroidVideoEncoderFactory created";
+  if (force_sw_h264) {
+    m_swH264EncoderFactory = CreateSoftwareH264VideoEncoderFactory();
+    if (m_swH264EncoderFactory) {
+      RTC_LOG(LS_INFO) << "AndroidVideoEncoderFactory: force_sw_h264=true "
+                          "— SW H264 encoder (c2.android.avc.encoder) will be used";
+    } else {
+      RTC_LOG(LS_WARNING) << "AndroidVideoEncoderFactory: force_sw_h264=true "
+                             "but SW H264 factory unavailable — falling back to HW H264";
+    }
+  } else {
+    RTC_LOG(LS_INFO) << "AndroidVideoEncoderFactory: force_sw_h264=false "
+                        "— HW H264 encoder preferred (x264/SW fallback if unavailable)";
+  }
 }
 
 AndroidVideoEncoderFactory::~AndroidVideoEncoderFactory() {
@@ -111,19 +185,14 @@ bool AndroidVideoEncoderFactory::IsH264Format(
 
 void AndroidVideoEncoderFactory::EnsureH264InSupportedFormats(
     std::vector<webrtc::SdpVideoFormat>& formats) const {
-  // Check if H.264 is already in the supported formats
   for (const auto& format : formats) {
-    if (IsH264Format(format)) {
-      return;  // H.264 already supported
-    }
+    if (IsH264Format(format)) return;
   }
 
-  // Add H.264 format if not present
   webrtc::SdpVideoFormat h264_format(cricket::kH264CodecName);
   h264_format.parameters[cricket::kH264FmtpProfileLevelId] =
       cricket::kH264ProfileLevelConstrainedBaseline;
   formats.push_back(h264_format);
-
   RTC_LOG(LS_INFO) << "Added H.264 to supported formats";
 }
 
@@ -131,39 +200,50 @@ std::vector<webrtc::SdpVideoFormat>
 AndroidVideoEncoderFactory::GetSupportedFormats() const {
   std::vector<webrtc::SdpVideoFormat> formats;
 
-  // Get formats from hardware factory
   if (m_hwEncoderFactory) {
-    auto hw_formats = m_hwEncoderFactory->GetSupportedFormats();
-    formats.insert(formats.end(), hw_formats.begin(), hw_formats.end());
+    for (const auto& fmt : m_hwEncoderFactory->GetSupportedFormats()) {
+      // When SW H264 is forced, exclude HW H264 formats so SDP negotiation
+      // cannot select a profile only the HW encoder supports.
+      if (m_swH264EncoderFactory && IsH264Format(fmt)) continue;
+      formats.push_back(fmt);
+    }
   }
-
-  // Get formats from software factory
+  if (m_swH264EncoderFactory) {
+    for (const auto& fmt : m_swH264EncoderFactory->GetSupportedFormats()) {
+      if (IsH264Format(fmt)) formats.push_back(fmt);
+    }
+  }
   if (m_swEncoderFactory) {
-    auto sw_formats = m_swEncoderFactory->GetSupportedFormats();
-    formats.insert(formats.end(), sw_formats.begin(), sw_formats.end());
+    for (const auto& fmt : m_swEncoderFactory->GetSupportedFormats()) {
+      if (m_swH264EncoderFactory && IsH264Format(fmt)) continue;
+      formats.push_back(fmt);
+    }
   }
-
-  // Get formats from builtin factory
   if (m_builtinEncoderFactory) {
-    auto builtin_formats = m_builtinEncoderFactory->GetSupportedFormats();
-    formats.insert(formats.end(), builtin_formats.begin(),
-                   builtin_formats.end());
+    for (const auto& fmt : m_builtinEncoderFactory->GetSupportedFormats()) {
+      if (m_swH264EncoderFactory && IsH264Format(fmt)) continue;
+      formats.push_back(fmt);
+    }
   }
 
-  // Ensure H.264 is in supported formats
-  EnsureH264InSupportedFormats(formats);
+  // Skip synthetic H264 injection when the SW factory is active — it already
+  // advertises its own H264 formats, and Create() never falls back to HW/x264
+  // for H264 in that mode, so a synthetic entry could negotiate an unencodable format.
+  if (!m_swH264EncoderFactory) {
+    EnsureH264InSupportedFormats(formats);
+  }
 
-  // Remove duplicates
+  // Sort by (name, parameters) so same-codec variants are adjacent for unique().
   std::sort(formats.begin(), formats.end(),
-            [](const webrtc::SdpVideoFormat& a,
-               const webrtc::SdpVideoFormat& b) { return a.name < b.name; });
+            [](const webrtc::SdpVideoFormat& a, const webrtc::SdpVideoFormat& b) {
+              return a.name < b.name || (a.name == b.name && a.parameters < b.parameters);
+            });
   formats.erase(std::unique(formats.begin(), formats.end(),
                             [](const webrtc::SdpVideoFormat& a,
                                const webrtc::SdpVideoFormat& b) {
                               return a.IsSameCodec(b);
                             }),
                 formats.end());
-
   return formats;
 }
 
@@ -171,32 +251,26 @@ webrtc::VideoEncoderFactory::CodecSupport
 AndroidVideoEncoderFactory::QueryCodecSupport(
     const webrtc::SdpVideoFormat& format,
     std::optional<std::string> scalability_mode) const {
-  // Try hardware factory first
-  if (m_hwEncoderFactory) {
-    auto support =
-        m_hwEncoderFactory->QueryCodecSupport(format, scalability_mode);
-    if (support.is_supported) {
-      return support;
-    }
+  if (IsH264Format(format) && m_swH264EncoderFactory) {
+    return m_swH264EncoderFactory->QueryCodecSupport(format, scalability_mode);
   }
 
-  // For H.264, we always support it via X264
+  if (m_hwEncoderFactory) {
+    auto support = m_hwEncoderFactory->QueryCodecSupport(format, scalability_mode);
+    if (support.is_supported) return support;
+  }
+
   if (IsH264Format(format)) {
 #if defined(WEBRTC_USE_X264) && defined(WEBRTC_ANDROID)
     return {.is_supported = true, .is_power_efficient = false};
 #endif
   }
 
-  // Try software factory
   if (m_swEncoderFactory) {
-    auto support =
-        m_swEncoderFactory->QueryCodecSupport(format, scalability_mode);
-    if (support.is_supported) {
-      return support;
-    }
+    auto support = m_swEncoderFactory->QueryCodecSupport(format, scalability_mode);
+    if (support.is_supported) return support;
   }
 
-  // Try builtin factory
   if (m_builtinEncoderFactory) {
     return m_builtinEncoderFactory->QueryCodecSupport(format, scalability_mode);
   }
@@ -207,10 +281,20 @@ AndroidVideoEncoderFactory::QueryCodecSupport(
 std::unique_ptr<webrtc::VideoEncoder> AndroidVideoEncoderFactory::Create(
     const webrtc::Environment& env,
     const webrtc::SdpVideoFormat& format) {
-  // Try hardware factory first
+  // When SW H264 is forced, route H264 directly to the SW factory and never
+  // fall through to HW — even if the SW factory returns null.
+  if (IsH264Format(format) && m_swH264EncoderFactory) {
+    auto encoder = m_swH264EncoderFactory->Create(env, format);
+    if (encoder) {
+      RTC_LOG(LS_INFO) << "Created SW H264 encoder (force_sw_h264) for " << format.name;
+    } else {
+      RTC_LOG(LS_WARNING) << "SW H264 factory returned no encoder for " << format.name;
+    }
+    return encoder;
+  }
+
   if (m_hwEncoderFactory) {
-    for (const auto& supported_format :
-         m_hwEncoderFactory->GetSupportedFormats()) {
+    for (const auto& supported_format : m_hwEncoderFactory->GetSupportedFormats()) {
       if (supported_format.IsSameCodec(format)) {
         auto encoder = m_hwEncoderFactory->Create(env, format);
         if (encoder) {
@@ -221,7 +305,6 @@ std::unique_ptr<webrtc::VideoEncoder> AndroidVideoEncoderFactory::Create(
     }
   }
 
-  // For H.264, create X264VideoEncoder
   if (IsH264Format(format)) {
 #if defined(WEBRTC_USE_X264) && defined(WEBRTC_ANDROID)
     RTC_LOG(LS_INFO) << "Creating X264VideoEncoder for H.264";
@@ -229,10 +312,8 @@ std::unique_ptr<webrtc::VideoEncoder> AndroidVideoEncoderFactory::Create(
 #endif
   }
 
-  // Try software factory
   if (m_swEncoderFactory) {
-    for (const auto& supported_format :
-         m_swEncoderFactory->GetSupportedFormats()) {
+    for (const auto& supported_format : m_swEncoderFactory->GetSupportedFormats()) {
       if (supported_format.IsSameCodec(format)) {
         auto encoder = m_swEncoderFactory->Create(env, format);
         if (encoder) {
@@ -243,10 +324,8 @@ std::unique_ptr<webrtc::VideoEncoder> AndroidVideoEncoderFactory::Create(
     }
   }
 
-  // Try builtin factory
   if (m_builtinEncoderFactory) {
-    for (const auto& supported_format :
-         m_builtinEncoderFactory->GetSupportedFormats()) {
+    for (const auto& supported_format : m_builtinEncoderFactory->GetSupportedFormats()) {
       if (supported_format.IsSameCodec(format)) {
         auto encoder = m_builtinEncoderFactory->Create(env, format);
         if (encoder) {
@@ -261,10 +340,11 @@ std::unique_ptr<webrtc::VideoEncoder> AndroidVideoEncoderFactory::Create(
   return nullptr;
 }
 
-std::unique_ptr<webrtc::VideoEncoderFactory>
-CreateAndroidVideoEncoderFactory() {
-  RTC_LOG(LS_INFO) << "Creating AndroidVideoEncoderFactory";
-  return std::make_unique<AndroidVideoEncoderFactory>();
+std::unique_ptr<webrtc::VideoEncoderFactory> CreateAndroidVideoEncoderFactory(
+    bool force_sw_h264) {
+  RTC_LOG(LS_INFO) << "Creating AndroidVideoEncoderFactory (force_sw_h264="
+                   << force_sw_h264 << ")";
+  return std::make_unique<AndroidVideoEncoderFactory>(force_sw_h264);
 }
 
 }  // namespace livekit

@@ -1,0 +1,53 @@
+--- a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
++++ b/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
+@@ -47,6 +47,7 @@
+   private final boolean enableIntelVp8Encoder;
+   private final boolean enableH264HighProfile;
+   @Nullable private final Predicate<MediaCodecInfo> codecAllowedPredicate;
++  private final boolean allowSoftwareCodecs;
+
+   /**
+    * Creates a HardwareVideoEncoderFactory that supports surface texture encoding.
+@@ -59,7 +60,7 @@
+   public HardwareVideoEncoderFactory(
+       EglBase.Context sharedContext, boolean enableIntelVp8Encoder, boolean enableH264HighProfile) {
+     this(sharedContext, enableIntelVp8Encoder, enableH264HighProfile,
+-        /* codecAllowedPredicate= */ null);
++        /* codecAllowedPredicate= */ null, /* allowSoftwareCodecs= */ false);
+   }
+
+   /**
+@@ -74,6 +75,13 @@
+    */
+   public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
+       boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate) {
++    this(sharedContext, enableIntelVp8Encoder, enableH264HighProfile, codecAllowedPredicate,
++        /* allowSoftwareCodecs= */ false);
++  }
++
++  public HardwareVideoEncoderFactory(EglBase.Context sharedContext, boolean enableIntelVp8Encoder,
++      boolean enableH264HighProfile, @Nullable Predicate<MediaCodecInfo> codecAllowedPredicate,
++      boolean allowSoftwareCodecs) {
+     // Texture mode requires EglBase14.
+     if (sharedContext instanceof EglBase14.Context) {
+       this.sharedContext = (EglBase14.Context) sharedContext;
+@@ -84,6 +92,7 @@
+     this.enableIntelVp8Encoder = enableIntelVp8Encoder;
+     this.enableH264HighProfile = enableH264HighProfile;
+     this.codecAllowedPredicate = codecAllowedPredicate;
++    this.allowSoftwareCodecs = allowSoftwareCodecs;
+   }
+
+   @Deprecated
+@@ -186,7 +195,10 @@
+   // current SDK.
++  // Note: allowSoftwareCodecs is only effective on API 29+ (Android 10 / Q) where
++  // isHardwareAccelerated() is available. On earlier APIs the switch(type) path below
++  // is unchanged and may still select hardware encoders.
+   private boolean isHardwareSupportedInCurrentSdk(MediaCodecInfo info, VideoCodecMimeType type) {
+     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-      return info.isHardwareAccelerated();
++      return allowSoftwareCodecs ? !info.isHardwareAccelerated() : info.isHardwareAccelerated();
+     }
+
+     switch (type) {

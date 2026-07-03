@@ -39,6 +39,11 @@ FfiHandleId livekit_ffi_request(const uint8_t *data,
 
 bool livekit_ffi_drop_handle(FfiHandleId handle_id);
 
+/// Explicitly sets whether the SW H264 encoder should be used instead of HW.
+/// The application calls this before the first room connection based on its
+/// own device/chipset policy.  On non-Android platforms the flag is ignored.
+void livekit_ffi_set_force_sw_h264(bool force);
+
 void livekit_ffi_dispose();
 
 }  // extern "C"

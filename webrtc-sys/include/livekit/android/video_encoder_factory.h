@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "api/video_codecs/sdp_video_format.h"
@@ -27,7 +28,11 @@ namespace livekit {
 
 class AndroidVideoEncoderFactory : public webrtc::VideoEncoderFactory {
  public:
-  AndroidVideoEncoderFactory();
+  // force_sw_h264: when true, H264 encoding prefers the SW MediaCodec encoder
+  // (c2.android.avc.encoder) over the HW encoder.  Best-effort: falls back to
+  // HW if the SW factory cannot be created (e.g., stale jar / missing ctor).
+  // Effective on API 29+ only; on earlier APIs HW may still be selected.
+  explicit AndroidVideoEncoderFactory(bool force_sw_h264 = false);
   ~AndroidVideoEncoderFactory() override;
 
   std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override;
@@ -48,8 +53,11 @@ class AndroidVideoEncoderFactory : public webrtc::VideoEncoderFactory {
   const std::unique_ptr<webrtc::VideoEncoderFactory> m_builtinEncoderFactory;
   std::unique_ptr<webrtc::VideoEncoderFactory> m_hwEncoderFactory;
   std::unique_ptr<webrtc::VideoEncoderFactory> m_swEncoderFactory;
+  // Non-null when force_sw_h264=true — SW MediaCodec H264 encoder factory.
+  std::unique_ptr<webrtc::VideoEncoderFactory> m_swH264EncoderFactory;
 };
 
-std::unique_ptr<webrtc::VideoEncoderFactory> CreateAndroidVideoEncoderFactory();
+std::unique_ptr<webrtc::VideoEncoderFactory> CreateAndroidVideoEncoderFactory(
+    bool force_sw_h264 = false);
 
 }  // namespace livekit

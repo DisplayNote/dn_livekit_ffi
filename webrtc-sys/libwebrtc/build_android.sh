@@ -139,6 +139,7 @@ patches=(
   "ssl_verify_callback_with_native_handle.patch"
   "add_deps.patch"
   "android_use_libunwind.patch"
+  "sw_h264_fallback.patch"
 )
 
 patch_failed=false

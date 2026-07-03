@@ -41,7 +41,8 @@ webrtc::PeerConnectionInterface::RTCConfiguration to_native_rtc_configuration(
 
 class PeerConnectionFactory {
  public:
-  explicit PeerConnectionFactory(std::shared_ptr<RtcRuntime> rtc_runtime);
+  explicit PeerConnectionFactory(std::shared_ptr<RtcRuntime> rtc_runtime,
+                                 bool force_sw_h264 = false);
   ~PeerConnectionFactory();
 
   std::shared_ptr<PeerConnection> create_peer_connection(
@@ -69,5 +70,7 @@ class PeerConnectionFactory {
   webrtc::TaskQueueFactory* task_queue_factory_;
 };
 
-std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory();
+std::shared_ptr<PeerConnectionFactory> create_peer_connection_factory(
+    bool force_sw_h264 = false);
+
 }  // namespace livekit

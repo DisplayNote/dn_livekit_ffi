@@ -40,18 +40,29 @@ pub struct PeerConnectionFactory {
     pub(crate) sys_handle: SharedPtr<sys_pcf::ffi::PeerConnectionFactory>,
 }
 
-impl Default for PeerConnectionFactory {
-    fn default() -> Self {
+impl PeerConnectionFactory {
+    /// Creates a PeerConnectionFactory.
+    ///
+    /// `force_sw_h264`: when `true`, H264 encoding prefers the Android SW MediaCodec
+    /// encoder (`c2.android.avc.encoder`) over the HW encoder.  Best-effort: falls
+    /// back to HW if the SW factory cannot be created (e.g., stale jar), and effective
+    /// on API 29+ only.  The caller is responsible for the device/chipset policy
+    /// decision.  On non-Android platforms the flag is ignored.
+    pub fn new(force_sw_h264: bool) -> Self {
         let mut log_sink = LOG_SINK.lock();
         if log_sink.is_none() {
             *log_sink = Some(sys_rtc::ffi::new_log_sink(|msg, _| {
                 let msg = msg.strip_suffix("\r\n").or(msg.strip_suffix('\n')).unwrap_or(&msg);
-
                 log::debug!(target: "libwebrtc", "{}", msg);
             }));
         }
+        Self { sys_handle: sys_pcf::ffi::create_peer_connection_factory(force_sw_h264) }
+    }
+}
 
-        Self { sys_handle: sys_pcf::ffi::create_peer_connection_factory() }
+impl Default for PeerConnectionFactory {
+    fn default() -> Self {
+        Self::new(false)
     }
 }
 
@@ -112,6 +123,16 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let factory = PeerConnectionFactory::default();
+        let source = NativeVideoSource::default();
+        let _track = factory.create_video_track("test", source);
+        drop(factory);
+    }
+
+    #[tokio::test]
+    async fn test_peer_connection_factory_force_sw_h264() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let factory = PeerConnectionFactory::new(true);
         let source = NativeVideoSource::default();
         let _track = factory.create_video_track("test", source);
         drop(factory);

@@ -14,12 +14,38 @@
 
 use std::{
     fmt::{Debug, Formatter},
-    sync::{Arc, Weak},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Weak,
+    },
 };
 
 use lazy_static::lazy_static;
 use libwebrtc::prelude::*;
 use parking_lot::Mutex;
+
+// Set by livekit_ffi_set_force_sw_h264() before the first room connection.
+// LkRuntime reads this once when creating PeerConnectionFactory.
+static FORCE_SW_H264: AtomicBool = AtomicBool::new(false);
+
+pub fn set_force_sw_h264(val: bool) {
+    // Hold the lock across both the check and the store so that
+    // LkRuntime::instance() (which reads FORCE_SW_H264 under the same lock)
+    // cannot race between the two operations.
+    let already_alive = {
+        let _guard = LK_RUNTIME.lock();
+        let alive = _guard.upgrade().is_some();
+        FORCE_SW_H264.store(val, Ordering::SeqCst);
+        alive
+    };
+    if already_alive {
+        log::warn!(
+            "set_force_sw_h264({}) called after LkRuntime was already created \
+             — flag will not affect the current runtime instance",
+            val
+        );
+    }
+}
 
 lazy_static! {
     static ref LK_RUNTIME: Mutex<Weak<LkRuntime>> = Mutex::new(Weak::new());
@@ -42,7 +68,11 @@ impl LkRuntime {
             lk_runtime
         } else {
             log::debug!("LkRuntime::new()");
-            let new_runtime = Arc::new(Self { pc_factory: PeerConnectionFactory::default() });
+            let new_runtime = Arc::new(Self {
+                pc_factory: PeerConnectionFactory::new(
+                    FORCE_SW_H264.load(Ordering::SeqCst),
+                ),
+            });
             *lk_runtime_ref = Arc::downgrade(&new_runtime);
             new_runtime
         }

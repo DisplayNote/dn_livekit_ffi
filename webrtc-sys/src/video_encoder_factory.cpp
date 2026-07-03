@@ -57,13 +57,15 @@ using Factory = webrtc::VideoEncoderFactoryTemplate<
 #endif
     webrtc::LibvpxVp9EncoderTemplateAdapter>;
 
-VideoEncoderFactory::InternalFactory::InternalFactory() {
+VideoEncoderFactory::InternalFactory::InternalFactory(bool force_sw_h264) {
 #ifdef __APPLE__
   factories_.push_back(livekit::CreateObjCVideoEncoderFactory());
 #endif
 
 #ifdef WEBRTC_ANDROID
-  factories_.push_back(CreateAndroidVideoEncoderFactory());
+  factories_.push_back(CreateAndroidVideoEncoderFactory(force_sw_h264));
+#else
+  (void)force_sw_h264;
 #endif
 
 #if defined(USE_NVIDIA_VIDEO_CODEC)
@@ -128,8 +130,8 @@ VideoEncoderFactory::InternalFactory::Create(
   return nullptr;
 }
 
-VideoEncoderFactory::VideoEncoderFactory() {
-  internal_factory_ = std::make_unique<InternalFactory>();
+VideoEncoderFactory::VideoEncoderFactory(bool force_sw_h264) {
+  internal_factory_ = std::make_unique<InternalFactory>(force_sw_h264);
 }
 
 std::vector<webrtc::SdpVideoFormat> VideoEncoderFactory::GetSupportedFormats()
