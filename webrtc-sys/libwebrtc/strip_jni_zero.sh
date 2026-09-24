@@ -32,6 +32,11 @@ fi
 
 echo "Stripping org.jni_zero symbols from libwebrtc.jar..."
 temp_jar_dir="$(mktemp -d)"
+# Clean up on every exit path, not just the happy one. Under `set -e` this
+# script can leave through the hard failure below or through any command that
+# fails, and without the trap each of those leaves an extracted jar tree
+# behind -- one per build attempt, on a CI agent that keeps its /tmp.
+trap 'rm -rf "$temp_jar_dir"' EXIT
 pushd "$temp_jar_dir" >/dev/null
 
 # Extract the JAR
@@ -76,5 +81,4 @@ fi
 jar -cf "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar" .
 
 popd >/dev/null
-rm -rf "$temp_jar_dir"
 echo "  ✓ Stripped org.jni_zero symbols from libwebrtc.jar"
