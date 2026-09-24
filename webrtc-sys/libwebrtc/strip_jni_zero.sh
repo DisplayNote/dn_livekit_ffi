@@ -37,22 +37,28 @@ pushd "$temp_jar_dir" >/dev/null
 # Extract the JAR
 jar -xf "$OUTPUT_DIR/lib.java/sdk/android/libwebrtc.jar"
 
-# Remove org.jni_zero classes, except the bootstrap ones listed above.
-if [[ -d "org/jni_zero" ]]; then
-  # Fail loudly if a class we must keep is gone: that means the WebRTC revision
-  # in .gclient moved past the point where jni_zero still defines it, and the
-  # assumption this whole script rests on no longer holds. Better a broken
-  # build than a jar that dexes cleanly and crashes on device.
-  for cls in "${KEEP_CLASSES[@]}"; do
-    if ! compgen -G "org/jni_zero/${cls}.class" >/dev/null; then
-      echo "Error: org/jni_zero/${cls}.class is not in this libwebrtc.jar." >&2
-      echo "       liblivekit_ffi.so resolves it at runtime, so the APK would" >&2
-      echo "       build and then crash on the first broadcast. Check whether" >&2
-      echo "       the WebRTC revision in .gclient still provides it." >&2
-      exit 1
-    fi
-  done
+# Fail loudly if a class we must keep is gone: that means the WebRTC revision
+# in .gclient moved past the point where jni_zero still defines it, and the
+# assumption this whole script rests on no longer holds. Better a broken build
+# than a jar that dexes cleanly and crashes on device.
+#
+# Checked before -- and independently of -- the directory test below, because
+# a revision that drops org/jni_zero altogether would otherwise skip the whole
+# block, guard included, and emit a jar missing the bootstrap without a word.
+for cls in "${KEEP_CLASSES[@]}"; do
+  if ! compgen -G "org/jni_zero/${cls}.class" >/dev/null; then
+    echo "Error: org/jni_zero/${cls}.class is not in this libwebrtc.jar." >&2
+    echo "       liblivekit_ffi.so resolves it at runtime, so the APK would" >&2
+    echo "       build and then crash on the first broadcast. Check whether" >&2
+    echo "       the WebRTC revision in .gclient still provides it." >&2
+    exit 1
+  fi
+done
 
+# Remove org.jni_zero classes, except the bootstrap ones listed above. The
+# directory necessarily exists at this point -- the check above found classes
+# inside it -- so this test is belt and braces, not the gate.
+if [[ -d "org/jni_zero" ]]; then
   echo "  Removing org/jni_zero classes except: ${KEEP_CLASSES[*]}"
   keep_expr=()
   for cls in "${KEEP_CLASSES[@]}"; do
