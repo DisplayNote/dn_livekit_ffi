@@ -20,8 +20,9 @@ livekit-server --dev &
 cargo test --features __lk-e2e-test
 ```
 
-All of them compile `webrtc-sys`, which needs `LK_CUSTOM_WEBRTC` or network access for
-the upstream prebuilt download.
+The `cargo test` commands compile `webrtc-sys`, which needs `LK_CUSTOM_WEBRTC` or network
+access for the upstream prebuilt download. `cargo fmt -- --check` and starting
+`livekit-server` do not, so formatting checks also work offline.
 
 ## CI
 

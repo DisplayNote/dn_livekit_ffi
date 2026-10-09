@@ -65,18 +65,21 @@ Upstream sync procedure and full build instructions: [FORK_DOCUMENTATION.md](FOR
 
 ## Run / build / test / lint
 
-libwebrtc must be built (or `LK_CUSTOM_WEBRTC` pointed at a build) before any crate
-that depends on `webrtc-sys` compiles. Details: [docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
+DisplayNote Android artifacts need a custom libwebrtc build (`LK_CUSTOM_WEBRTC` pointed at it,
+which `generate_conan_build.sh` does). Without `LK_CUSTOM_WEBRTC`, `webrtc-sys-build` downloads
+LiveKit's upstream prebuilt binaries (`webrtc-sys/build/src/lib.rs`), which is enough for host
+tests and other dependent crates but lacks the DN Android changes. Details:
+[docs/runbooks/local-setup.md](docs/runbooks/local-setup.md).
 
 ```bash
 # 1. libwebrtc for Android (from webrtc-sys/libwebrtc; needs ANDROID_HOME or ~/Android/Sdk)
-cd webrtc-sys/libwebrtc && ./build_android.sh --arch arm64 --profile release
+(cd webrtc-sys/libwebrtc && ./build_android.sh --arch arm64 --profile release)
 
 # 2. livekit-ffi for Android + Conan folder (needs ANDROID_NDK_HOME, cargo-ndk, cbindgen)
-cd livekit-ffi && ./generate_conan_build.sh --platform android --arch arm64 --profile release
+(cd livekit-ffi && ./generate_conan_build.sh --platform android --arch arm64 --profile release)
 
 # 3. Export the Conan package (Conan 1.x)
-cd livekit-ffi_conan && conan export-pkg . livekit-ffi/<version>@dn/stable -pr <profile> -f
+(cd livekit-ffi_conan && conan export-pkg . livekit-ffi/<version>@dn/stable -pr <profile> -f)
 ```
 
 ```bash

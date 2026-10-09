@@ -14,7 +14,10 @@ git submodule update --init --recursive   # livekit-protocol/protocol, yuv-sys/l
 git clone https://code.videolan.org/videolan/x264.git webrtc-sys/third_party/x264
 ```
 
-The x264 revision DN builds against is not recorded in the repository.
+The x264 revision DN builds against is not recorded in the repository, so this clone follows
+x264's default branch and the same repository tag can produce different binaries over time.
+Until a reviewed x264 commit is pinned (or the gitlink is restored), record the commit you
+built with `git -C webrtc-sys/third_party/x264 rev-parse HEAD` alongside the release.
 
 Run `/secret-scan-setup` once per clone (or `--global` once per machine for new clones) — commits containing secrets are blocked locally and in CI.
 `/secret-scan-setup` is a Claude Code command from DisplayNote's `displaynote-engineering` plugin (install it with `/plugin install displaynote-engineering`); it is not part of this repository.
@@ -30,9 +33,9 @@ Run `/secret-scan-setup` once per clone (or `--global` once per machine for new 
 ## 3. Build libwebrtc (once per arch/profile)
 
 ```bash
-cd webrtc-sys/libwebrtc
-./build_android.sh --arch arm64 --profile release    # arm | arm64 | x64
-# Windows (cmd): build_windows.cmd --arch x64 --profile release
+# Run from the repository root; the subshell returns there afterwards
+(cd webrtc-sys/libwebrtc && ./build_android.sh --arch arm64 --profile release)    # arm | arm64 | x64
+# Windows (cmd): cd webrtc-sys\libwebrtc && build_windows.cmd --arch x64 --profile release && cd ..\..
 ```
 
 Output: `webrtc-sys/libwebrtc/android-<arch>-<profile>/` (libs, headers, `libwebrtc.jar`).
@@ -41,8 +44,8 @@ The first run clones depot_tools and syncs WebRTC (large download).
 ## 4. Build livekit-ffi and the Conan folder
 
 ```bash
-cd livekit-ffi
-./generate_conan_build.sh --platform android --arch arm64 --profile release
+# Run from the repository root
+(cd livekit-ffi && ./generate_conan_build.sh --platform android --arch arm64 --profile release)
 # Windows (cmd): generate_conan_build.bat --platform windows --lk_custom_webrtc <path-to-webrtc-build>
 ```
 
