@@ -25,3 +25,5 @@ livekit-ffi_conan/
 
 # Exclude third_party directories
 **/third_party
+# dn_logscrub placeholder maps hold the ORIGINAL values — never commit them
+*.dnmap
