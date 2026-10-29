@@ -16,6 +16,7 @@ Android encoder/decoder factory with SW-H264 control, and (c) add an x264 encode
 |---|---|
 | `webrtc-sys/libwebrtc/build_android.sh` | depot_tools + `gclient sync`, reset checkout, apply patches, run `migrate_webrtc.sh` / `webrtc_structure.sh`, GN/ninja build, `strip_jni_zero.sh`, copy artifacts to `android-<arch>-<profile>/` |
 | `webrtc-sys/libwebrtc/migrate_webrtc.sh`, `webrtc_structure.sh` | Rewrite `org.webrtc` → `livekit.org.webrtc` and move sources |
+| `webrtc-sys/libwebrtc/webrtc_fingerprint.sh`, `conan/conanfile.py` | Conan reference `webrtc/137.<hash>@dn/livekit` of the prebuilt libwebrtc (hash of `.gclient`, scripts, patches, recipe, params) and the export-pkg recipe; Azure fetches it and only builds on a miss |
 | `webrtc-sys/libwebrtc/strip_jni_zero.sh` | Remove `org.jni_zero` from `libwebrtc.jar` except `JniInit`, `JniUtil` |
 | `webrtc-sys/libwebrtc/patches/sw_h264_fallback.patch` | `HardwareVideoEncoderFactory` gains `allowSoftwareCodecs` |
 | `webrtc-sys/src/android/video_encoder_factory.cpp` | `AndroidVideoEncoderFactory(force_sw_h264)`: HW / SW-H264 / x264 / builtin routing via JNI |
@@ -38,6 +39,7 @@ The Android routing itself is only exercised on device through the host app.
 
 ## Typical changes
 
-- New libwebrtc patch → add file under `patches/` and to the `patches=(…)` array.
+- New libwebrtc patch → add file under `patches/` and to the `patches=(…)` array (the
+  Conan key changes automatically, so CI rebuilds and re-uploads libwebrtc).
 - New Android ABI → `build_android.sh` arch list, `generate_conan_build.sh`,
   `conanfile.py` libdirs, `setup_x264()` target match, Azure stages.
