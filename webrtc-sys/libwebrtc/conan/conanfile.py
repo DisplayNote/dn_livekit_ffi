@@ -15,7 +15,7 @@ class WebrtcConan(ConanFile):
 
     Created from a build folder, never built by Conan:
         conan export-pkg conan/conanfile.py <ref from webrtc_fingerprint.sh> \
-            -pr <profile> -s build_type=Release --package-folder <os>-<arch>-release -f
+            -pr <profile>.release --package-folder <os>-<arch>-release -f
     """
 
     name = 'webrtc'

@@ -39,11 +39,11 @@ instead of building (Conan 1.x, `dn` remote and DN profiles configured):
 ```bash
 # Run from the repository root
 ref=$(webrtc-sys/libwebrtc/webrtc_fingerprint.sh android arm64 release)   # win x64 release on Windows
-conan install "$ref" -pr android.arm64-v8a -s build_type=Release -r dn -g deploy -if /tmp/webrtc-deploy
+conan install "$ref" -pr android.arm64-v8a.release -r dn -g deploy -if /tmp/webrtc-deploy
 mv /tmp/webrtc-deploy/webrtc webrtc-sys/libwebrtc/android-arm64-release
 ```
 
-Profiles per arch: `arm` → `android.armeabi-v7a`, `arm64` → `android.arm64-v8a`,
+Profiles per arch (DN `conan-profiles-qt6`, suffixed `.release`): `arm` → `android.armeabi-v7a`, `arm64` → `android.arm64-v8a`,
 `x64` → `android.x86_64`, Windows `x64` → `msvc19.x86_64`. If the package is missing
 (you changed a patch or build script), build it as below.
 
