@@ -69,9 +69,7 @@ impl LkRuntime {
         } else {
             log::debug!("LkRuntime::new()");
             let new_runtime = Arc::new(Self {
-                pc_factory: PeerConnectionFactory::new(
-                    FORCE_SW_H264.load(Ordering::SeqCst),
-                ),
+                pc_factory: PeerConnectionFactory::new(FORCE_SW_H264.load(Ordering::SeqCst)),
             });
             *lk_runtime_ref = Arc::downgrade(&new_runtime);
             new_runtime

@@ -91,9 +91,7 @@ pub mod ffi {
         // force_sw_h264: when true, H264 encoding prefers the SW MediaCodec encoder
         // (c2.android.avc.encoder) over the HW encoder.  Best-effort: falls back
         // to HW if the SW factory cannot be created.  Effective on API 29+ only.
-        fn create_peer_connection_factory(
-            force_sw_h264: bool,
-        ) -> SharedPtr<PeerConnectionFactory>;
+        fn create_peer_connection_factory(force_sw_h264: bool) -> SharedPtr<PeerConnectionFactory>;
 
         fn create_peer_connection(
             self: &PeerConnectionFactory,
