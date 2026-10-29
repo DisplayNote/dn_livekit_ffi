@@ -110,6 +110,14 @@ If you want to apply the rebase without stopping for conflicts (use with caution
 git rebase --apply
 ```
 
+### 6. Re-pin WebRTC
+`webrtc-sys/libwebrtc/.gclient` pins an exact webrtc-sdk commit (it changes the prebuilt
+libwebrtc Conan key computed by `webrtc_fingerprint.sh`). When the sync moves to a new
+milestone or branch head, update the commit (and `MILESTONE` in `webrtc_fingerprint.sh`):
+```sh
+git ls-remote https://github.com/webrtc-sdk/webrtc.git refs/heads/m137_release
+```
+
 ## Steps to Build WebRTC
 
 WebRTC needs to be built first before building livekit-ffi. Follow these steps:
