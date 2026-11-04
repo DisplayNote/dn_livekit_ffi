@@ -250,8 +250,9 @@ cp "$OUTPUT_DIR/LICENSE.md" "$ARTIFACTS_DIR"
 
 # --- headers ---
 pushd src >/dev/null
-find . -name "*.h" -print | cpio -pd "$ARTIFACTS_DIR/include"
-find . -name "*.inc" -print | cpio -pd "$ARTIFACTS_DIR/include"
+# Skip host sysroots: not WebRTC headers, and they hold dangling symlinks
+find . -name "*-sysroot" -prune -o -name "*.h" -print | cpio -pd "$ARTIFACTS_DIR/include"
+find . -name "*-sysroot" -prune -o -name "*.inc" -print | cpio -pd "$ARTIFACTS_DIR/include"
 popd >/dev/null
 
 echo "Done. Artifacts in: $ARTIFACTS_DIR"

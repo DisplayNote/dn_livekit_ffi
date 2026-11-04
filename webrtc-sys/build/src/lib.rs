@@ -193,7 +193,9 @@ pub fn configure_jni_symbols() -> Result<()> {
         .output()
         .expect("failed to run llvm-readelf");
 
-    let jni_regex = Regex::new(r"(Java_livekit_org_webrtc.*)").unwrap();
+    // DN libwebrtc renames org.webrtc to livekit.org.webrtc (migrate_webrtc.sh); the upstream
+    // prebuilt used without LK_CUSTOM_WEBRTC (e.g. GitHub CI) still exports Java_org_webrtc_*
+    let jni_regex = Regex::new(r"(Java_(?:livekit_)?org_webrtc.*)").unwrap();
     let content = String::from_utf8_lossy(&readelf_output.stdout);
     let jni_symbols: Vec<&str> =
         jni_regex.captures_iter(&content).map(|cap| cap.get(1).unwrap().as_str()).collect();

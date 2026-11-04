@@ -60,6 +60,7 @@ examples/             upstream Rust examples (separate Cargo workspace)
 | Android C++ runtime | `c++_shared` instead of `c++_static` ("for Qt compatibility") | `webrtc-sys/build.rs` |
 | C header | cbindgen config excludes JNI symbols; header committed | `livekit-ffi/cbindgen.toml`, `livekit-ffi/include/livekit_ffi.h` |
 | Packaging | Conan 1.x recipe + build scripts; Azure Pipelines | `livekit-ffi/conan_assets/conanfile.py`, `livekit-ffi/generate_conan_build.{sh,bat}`, `.azure/pipelines/` |
+| Prebuilt libwebrtc cache | `.gclient` pinned to a webrtc-sdk commit; CI fetches `webrtc/137.<hash>@dn/livekit` from the DN Conan remote and only builds (then uploads) on a miss | `webrtc-sys/libwebrtc/webrtc_fingerprint.sh`, `webrtc-sys/libwebrtc/conan/conanfile.py`, `.azure/pipelines/webrtc-builds*` |
 
 Upstream sync procedure and full build instructions: [FORK_DOCUMENTATION.md](FORK_DOCUMENTATION.md).
 
@@ -118,6 +119,7 @@ See [docs/architecture.md](docs/architecture.md) for diagrams and data flows, an
 
 ## Gotchas
 
+- The prebuilt libwebrtc Conan key (`webrtc_fingerprint.sh`) hashes `.gclient`, the build scripts, `patches/*` and the recipe, so changing any of them triggers a rebuild in CI. A new input that affects the output (e.g. a new script) must be added to the script's `inputs`; bump its `SALT` to force a rebuild.
 - `livekit_ffi_set_force_sw_h264` only takes effect before the first `LkRuntime` (first room connection); later calls log a warning and are ignored (`lk_runtime.rs`).
 - `strip_jni_zero.sh` must keep `JniInit`/`JniUtil`; removing them crashes the host with `ClassNotFoundException` at runtime, not at build time.
 - `generate_conan_build.sh` builds Android with `webrtc-sys/use_x264`; the Azure Android builds (`.azure/pipelines/ffi-builds.yml`) use only `rustls-tls-webpki-roots`. The Windows `.bat` armv7 branch passes `webrtc-sys/x264`, a feature that does not exist in `webrtc-sys/Cargo.toml` (`use_x264`).

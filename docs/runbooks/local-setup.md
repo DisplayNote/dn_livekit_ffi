@@ -30,7 +30,24 @@ Run `/secret-scan-setup` once per clone (or `--global` once per machine for new 
 - Python 3, git, Conan 1.x (the recipe uses `from conans import …`).
 - `webrtc-sys/build.rs` builds x264 for Android with the NDK's `linux-x86_64` prebuilt toolchain, so Android builds expect a Linux host.
 
-## 3. Build libwebrtc (once per arch/profile)
+## 3. Get libwebrtc from Conan (no build)
+
+CI stores every libwebrtc it builds in the DN Conan remote, keyed by a hash of the pinned
+revision, DN patches/scripts and build params. If the key for your checkout exists, use it
+instead of building (Conan 1.x, `dn` remote and DN profiles configured):
+
+```bash
+# Run from the repository root
+ref=$(webrtc-sys/libwebrtc/webrtc_fingerprint.sh android arm64 release)   # win x64 release on Windows
+conan install "$ref" -pr android.arm64-v8a.release -r dn -g deploy -if /tmp/webrtc-deploy
+mv /tmp/webrtc-deploy/webrtc webrtc-sys/libwebrtc/android-arm64-release
+```
+
+Profiles per arch (DN `conan-profiles-qt6`, suffixed `.release`): `arm` → `android.armeabi-v7a`, `arm64` → `android.arm64-v8a`,
+`x64` → `android.x86_64`, Windows `x64` → `msvc19.x86_64`. If the package is missing
+(you changed a patch or build script), build it as below.
+
+## 4. Build libwebrtc (once per arch/profile)
 
 ```bash
 # Run from the repository root; the subshell returns there afterwards
@@ -41,7 +58,7 @@ Run `/secret-scan-setup` once per clone (or `--global` once per machine for new 
 Output: `webrtc-sys/libwebrtc/android-<arch>-<profile>/` (libs, headers, `libwebrtc.jar`).
 The first run clones depot_tools and syncs WebRTC (large download).
 
-## 4. Build livekit-ffi and the Conan folder
+## 5. Build livekit-ffi and the Conan folder
 
 ```bash
 # Run from the repository root
@@ -53,7 +70,7 @@ The `.sh` script sets `LK_CUSTOM_WEBRTC` to `../webrtc-sys/libwebrtc/android-<ar
 regenerates `include/livekit_ffi.h` with cbindgen and fills `../livekit-ffi_conan/`
 (gitignored). The `.bat` script requires `--lk_custom_webrtc`.
 
-## 5. Host-side development without Android
+## 6. Host-side development without Android
 
 For a desktop build of the Rust crates, point `LK_CUSTOM_WEBRTC` at a local libwebrtc
 build (see `.vscode/tasks.json`, which uses `webrtc-sys/libwebrtc/mac-arm64-debug`) or
