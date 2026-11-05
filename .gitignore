@@ -27,3 +27,9 @@ livekit-ffi_conan/
 **/third_party
 # dn_logscrub placeholder maps hold the ORIGINAL values — never commit them
 *.dnmap
+
+# docs-sync (roadmap 2.30) artifacts
+docs-freshness.json
+docs-agent.log
+docs-agent-prompt.txt
+docs-scope.txt

@@ -1,0 +1,12 @@
+{
+  "_comment": "Per-repo manifest for roadmap 2.30. The docs-sync agent maintains the `modules` list; docs_freshness.py reads it to compute coverage + freshness. Each module maps one doc file to the code path(s) it documents. This is DisplayNote's fork of livekit/rust-sdks (branch main): most of the tree is upstream, and the two module docs cover the areas DisplayNote maintains (see AGENTS.md, Fork delta).",
+  "docs_root": "docs",
+  "coverage_target": 0.80,
+  "freshness_max_lag_days": 30,
+  "min_doc_bytes": 400,
+  "ignore_code_globs": ["**/*.md"],
+  "modules": [
+    { "name": "livekit-ffi", "doc": "docs/modules/livekit-ffi.md", "code_paths": ["livekit-ffi"] },
+    { "name": "webrtc-sys",  "doc": "docs/modules/webrtc-sys.md",  "code_paths": ["webrtc-sys", "libwebrtc"] }
+  ]
+}
