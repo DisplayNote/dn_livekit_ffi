@@ -29,6 +29,14 @@
 # can revoke them. Issuer and expiry come from the decoded claims (the signature
 # was not used). Accepted by Lucio Aragon 2026-11-05.
 #
+# Exception to "never add a fingerprint for a secret that is still valid": that
+# rule is for credentials DisplayNote owns and can rotate. Eight of these tokens
+# carry an expiry in 2030 or 2045, and we cannot tell whether LiveKit's issuing keys
+# still exist. They are third-party credentials that their owner published in its
+# own public repository (livekit/rust-sdks) in 2022-2023, so rewriting this fork's
+# history would not reduce their exposure, and rotating them is LiveKit's call.
+# Any new finding in a DisplayNote commit gets the normal rule: rotate first.
+#
 # LiveKit upstream (9ad7128319, 2022-04-30): upstream example access token for LiveKit's own server, issuer APICkHm83MhghPx, room testroom, identity test; expired 2022-05-23; not a DisplayNote credential, revocable only by LiveKit
 9ad71283193089e17cf8ab833d0d46108549816e:main.cpp:jwt:9
 # LiveKit upstream (8d20e35f02, 2022-05-08): upstream example access token for LiveKit's own server, issuer APICkHm83MhghPx, room testroom, identity test; expired 2022-05-23; not a DisplayNote credential, revocable only by LiveKit
