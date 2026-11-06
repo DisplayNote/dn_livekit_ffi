@@ -176,7 +176,7 @@ See [docs/glossary.md](docs/glossary.md).
 | GitHub `livekit/rust-sdks` | `upstream` (read-only for sync) | `FORK_DOCUMENTATION.md` |
 | Chromium depot_tools / WebRTC sources | libwebrtc checkout | `webrtc-sys/libwebrtc/build_*.sh`, `.gclient` |
 | videolan x264 | SW H264 encoder (submodule) | `.gitmodules`, `webrtc-sys/build.rs` |
-| Azure Pipelines + `DisplayNote/qt-conan-ci@2.0.0` templates | Release build and Conan create/upload | `.azure/pipelines/pipeline.yml` |
+| Azure Pipelines + `DisplayNote/qt-conan-ci@2.0.0` templates | Release build and Conan create/upload. Template repos are fetched through the `DisplayNote` GitHub App service connection (ADO project Broadcast, definition 200); never switch to a PAT-based connection | `.azure/pipelines/pipeline.yml` |
 | `DisplayNote/dn-pipeline-templates` (tracked from `main`) | `SecretScan` (gitleaks) and `DependencyScan` (OSV-Scanner + Grype) stages, both blocking, gating every build and the deploy (AI Security 4.1) | `.azure/pipelines/pipeline.yml`, `.gitleaks.toml`, `.gitleaksignore`, `osv-scanner.toml` |
 | GitHub Actions (DN docs-sync) | `docs-sync.yml` nightly and `docs-catchup.yml` weekly (Mon 05:00 UTC) and on demand, each opening one documentation PR against `main` (roadmap 2.30); they need the `COPILOT_PAT` secret and skip the agent step without it. Not a build gate | `.github/workflows/docs-*.yml`, [tools/docs-sync/README.md](tools/docs-sync/README.md) |
 | DN Conan remote | Package distribution | shared `qt-conan-ci` templates (not in this repo) |

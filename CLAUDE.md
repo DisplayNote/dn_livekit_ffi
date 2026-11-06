@@ -23,3 +23,4 @@ only adds Claude Code-specific DO / DON'T rules.
 - Don't log tokens, URLs with query strings, `JoinResponse`/`ReconnectResponse`, SDP, ICE candidates, request/event `{:?}` dumps or participant identities at any level.
 - Don't remove `JniInit`/`JniUtil` from the keep list in `strip_jni_zero.sh`.
 - Don't edit generated files (`livekit-ffi/src/livekit.proto.rs`, `livekit-protocol/src/livekit.rs`) by hand.
+- Don't point `resources.repositories` in `.azure/pipelines/` at a PAT-based service connection; use `endpoint: "DisplayNote"` (GitHub App).
