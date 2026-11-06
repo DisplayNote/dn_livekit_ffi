@@ -1,0 +1,39 @@
+# osv-scanner.toml — exceptions for the dependency gate (AI Security 4.1)
+# Copy to the repo root (or next to the lockfile it applies to).
+#
+# RULES (enforced by dependency-scan.yml — an invalid entry fails the job):
+#   * every entry needs `id`, `reason` and `ignoreUntil`;
+#   * `ignoreUntil` is at most 180 days away; after that date OSV-Scanner
+#     re-enables the finding on its own and the gate blocks again;
+#   * `reason` says WHY (no fix released / not reachable / test-only), the
+#     ticket and the owner. "false positive" alone is not a reason.
+#   * Upgrading the dependency is always preferred. An exception is a
+#     time-boxed decision, not a way to go green.
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = 2026-12-31
+# reason = "No fixed version released; only reachable via test fixtures. DN-1234, owner: <name>"
+
+# ── Exceptions ───────────────────────────────────────────────────────────────
+# zip@0.6.6 (crates.io): the only critical findings on main (2026-11-05), reported
+# for Cargo.lock and the examples' lockfiles. Its sole dependent is webrtc-sys-build
+# (`zip = "0.6"`), a build-script helper that downloads and unzips LiveKit's
+# prebuilt libwebrtc only when LK_CUSTOM_WEBRTC is unset. Every DisplayNote FFI
+# build sets LK_CUSTOM_WEBRTC to the libwebrtc built in this pipeline
+# (.azure/pipelines/ffi-builds-templates/ffi-stage-template.yml), so the vulnerable
+# extraction never runs in DisplayNote CI. A local build without LK_CUSTOM_WEBRTC
+# does run it, on LiveKit's own release archive fetched over HTTPS from
+# github.com/livekit (the advisory needs a crafted archive). zip is a build
+# dependency and is not linked into livekit_ffi. The fix is zip >= 9.0.5; upstream
+# is on 9.0.4, still affected. Upgrade webrtc-sys-build's zip (or take upstream's
+# fix) before this expires. No ADO ticket yet; owner: Lucio Aragon.
+[[IgnoredVulns]]
+id = "GHSA-m665-v7pm-7grj"
+ignoreUntil = 2027-02-03
+reason = "zip@0.6.6 is only used by webrtc-sys-build to unzip LiveKit's prebuilt libwebrtc when LK_CUSTOM_WEBRTC is unset: never in DisplayNote CI, and locally only on LiveKit's own release archive over HTTPS. Not linked into livekit_ffi. Fix: zip >= 9.0.5 (upstream still on 9.0.4). Owner: Lucio Aragon."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0369"
+ignoreUntil = 2027-02-03
+reason = "Same advisory as GHSA-m665-v7pm-7grj (zip@0.6.6 Zip Cloaking): only used by webrtc-sys-build when LK_CUSTOM_WEBRTC is unset, never in DisplayNote CI and locally only on LiveKit's own release archive over HTTPS. Not linked into livekit_ffi. Fix: zip >= 9.0.5. Owner: Lucio Aragon."

@@ -30,6 +30,31 @@ and room/participant identities flow through this library. Never add log lines t
 print them; see [docs/runbooks/debugging-with-ai.md](docs/runbooks/debugging-with-ai.md)
 for what the existing logging already exposes.
 
+- CI runs two blocking scan gates from `DisplayNote/dn-pipeline-templates` (AI Security
+  4.1) before any WebRTC build: `SecretScan` (gitleaks over the full history of the built
+  ref, upstream LiveKit history included) and `DependencyScan` (OSV-Scanner over every
+  `Cargo.lock`). A finding fails the run, so nothing is built or published. Accepted
+  secret findings live in `.gitleaksignore`, one fingerprint per line, each preceded by
+  its own comment line saying what it was, why it's safe, and who accepted it when
+  (gitleaks ignores an entry with a trailing comment); allowlists in `.gitleaks.toml` each
+  need a `description`. The 21 accepted today are LiveKit access tokens and a test
+  fixture in upstream commits, signed with LiveKit's own keys. The stage also applies the
+  DisplayNote `dn-credential-call-argument` rule on top of `.gitleaks.toml`, so reproduce
+  it locally with that rule too. Dependency exceptions live in `osv-scanner.toml`, each
+  with a `reason` and an `ignoreUntil` at most 180 days out. Never widen an allowlist or
+  extend an exception just to make a gate green: rotate the secret or upgrade the
+  dependency.
+
+This repo also carries a mandatory `code-review` agent skill (AI Security Roadmap §4.2)
+with two identical copies — `.agents/skills/code-review/SKILL.md` (Codex, Kiro, and
+similar agents) and `.github/skills/code-review/SKILL.md` (GitHub Copilot) — that runs a
+pre-PR review and requires every AI review to end with a `Security:` line covering
+injection, hardcoded secrets, insecure direct object references, and CVE-affected
+dependencies. Both copies are generated from the `displaynote-engineering` plugin's
+canonical skill, as are the `log-sanitise` copies next to them; do not hand-edit them;
+land changes in the plugin and re-sync with `/sync-skill code-review` and
+`/sync-skill log-sanitise`.
+
 ## Repository map
 
 ```text
@@ -43,8 +68,14 @@ webrtc-sys/           cxx bridge to libwebrtc — DN: build.rs (x264, Android fa
 webrtc-sys/libwebrtc/ libwebrtc build scripts + patches — DN: build_android.sh, migrate_webrtc.sh,
                       webrtc_structure.sh, strip_jni_zero.sh, patches/sw_h264_fallback.patch
 webrtc-sys/build/     build-dependency crate that locates/downloads libwebrtc (LK_CUSTOM_WEBRTC)
-.azure/pipelines/     DN release pipeline (tag-triggered): libwebrtc → livekit-ffi → Conan package
-.github/workflows/    Upstream GitHub Actions (kept from upstream)
+.azure/pipelines/     DN pipeline (tags + PRs): secret/dependency scans → libwebrtc → livekit-ffi → Conan package
+.github/workflows/    Upstream GitHub Actions (kept from upstream), plus DN's docs-sync.yml and docs-catchup.yml
+.github/skills/, .agents/   DN-vendored agent skills (code-review, log-sanitise), synced from displaynote-engineering
+tools/docs-sync/      DN docs-sync pack (roadmap 2.30): agent runner, PR opener, docs_freshness.py; see its README.md
+.docs-sync.json       docs-sync manifest: module -> doc (docs/modules/*.md) -> code paths
+.gitleaks.toml, .gitleaksignore, osv-scanner.toml   scan-gate config and accepted findings / exceptions
+docs/                 DN agent docs (architecture, modules, runbooks, glossary); docs/ai/prompts/docs-maintenance.md
+                      is the docs-sync agent's prompt
 imgproc/ yuv-sys/ soxr-sys/ livekit-runtime/   upstream helper crates
 examples/             upstream Rust examples (separate Cargo workspace)
 ```
@@ -129,6 +160,8 @@ See [docs/architecture.md](docs/architecture.md) for diagrams and data flows, an
 - `build_android.sh` runs `git reset --hard` + `git clean -fd` inside `webrtc-sys/libwebrtc/src` on every run — never keep edits there; use patches.
 - `livekit-ffi/src/server/tests.rs` is disabled (`//mod tests;` in `server/mod.rs`).
 - With `capture_logs = true` the FFI logger forwards every level (including debug/trace) to the host — see [debugging-with-ai.md](docs/runbooks/debugging-with-ai.md).
+- The `SecretScan` stage scans upstream LiveKit's full history too, so an upstream sync can bring new findings (upstream examples have committed LiveKit tokens before) and fail CI until they are triaged in `.gitleaksignore`. Likewise an upstream sync, or `cargo update`, can bring a critical advisory into any `Cargo.lock`, the examples' included.
+- `osv-scanner.toml` carries a time-boxed exception (until 2027-02-03) for `zip@0.6.6`, which `webrtc-sys-build` uses to unzip LiveKit's prebuilt libwebrtc when `LK_CUSTOM_WEBRTC` is unset. The fix is `zip` ≥ 9.0.5 (upstream is on 9.0.4, still affected); the gate blocks again when the exception expires.
 
 ## Glossary
 
@@ -144,4 +177,6 @@ See [docs/glossary.md](docs/glossary.md).
 | Chromium depot_tools / WebRTC sources | libwebrtc checkout | `webrtc-sys/libwebrtc/build_*.sh`, `.gclient` |
 | videolan x264 | SW H264 encoder (submodule) | `.gitmodules`, `webrtc-sys/build.rs` |
 | Azure Pipelines + `DisplayNote/qt-conan-ci@2.0.0` templates | Release build and Conan create/upload | `.azure/pipelines/pipeline.yml` |
+| `DisplayNote/dn-pipeline-templates` (tracked from `main`) | `SecretScan` (gitleaks) and `DependencyScan` (OSV-Scanner + Grype) stages, both blocking, gating every build and the deploy (AI Security 4.1) | `.azure/pipelines/pipeline.yml`, `.gitleaks.toml`, `.gitleaksignore`, `osv-scanner.toml` |
+| GitHub Actions (DN docs-sync) | `docs-sync.yml` nightly and `docs-catchup.yml` weekly (Mon 05:00 UTC) and on demand, each opening one documentation PR against `main` (roadmap 2.30); they need the `COPILOT_PAT` secret and skip the agent step without it. Not a build gate | `.github/workflows/docs-*.yml`, [tools/docs-sync/README.md](tools/docs-sync/README.md) |
 | DN Conan remote | Package distribution | shared `qt-conan-ci` templates (not in this repo) |

@@ -12,6 +12,9 @@ only adds Claude Code-specific DO / DON'T rules.
 - Patch libwebrtc through `webrtc-sys/libwebrtc/patches/` and the `patches=(…)` list in `build_android.sh`.
 - Run `cargo fmt -- --check` before committing Rust changes.
 - Use `/log-sanitise <file…>` before looking at any LiveKit / host log (see `docs/runbooks/debugging-with-ai.md`).
+- Know the Azure stage order: `setup` and the two scan gates (`SecretScan`, `DependencyScan`, in parallel) → WebRTC builds (each `dependsOn: [SecretScan, DependencyScan]`) → FFI builds → deploy (which also lists both gates). A new WebRTC build stage must pass the same `dependsOn`.
+- Treat both scan gates as blocking. `.gitleaksignore` fingerprints each need a preceding comment line (never a trailing one); `osv-scanner.toml` exceptions each need a `reason` and an `ignoreUntil` ≤ 180 days. After an upstream sync, triage new findings rather than widening either file.
+- Treat `.agents/skills/*` and `.github/skills/*` as generated: re-sync with `/sync-skill <name>` from the `displaynote-engineering` plugin instead of hand-editing.
 
 ## DON'T
 

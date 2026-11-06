@@ -1,0 +1,81 @@
+# .gitleaksignore — accepted findings, one fingerprint per line.
+# AI Security Roadmap control 4.1.
+#
+# A fingerprint identifies ONE finding: <commit>:<file>:<rule-id>:<line>
+# (copy it verbatim from the pipeline log or the gitleaks-report.json artifact).
+# Use this file only for:
+#   * a historical secret that has been ROTATED/REVOKED and cannot be removed
+#     from history without a rewrite the team has decided not to do;
+#   * a confirmed false positive that is too specific for a .gitleaks.toml
+#     allowlist.
+# Every fingerprint is preceded by a comment LINE: what it was, why it is safe
+# now, who accepted it and when. gitleaks does NOT accept trailing comments on
+# the fingerprint line itself (verified with 8.30.1 — the entry is silently
+# ignored). Never add a fingerprint for a secret that is still valid.
+#
+# Example:
+# dev Mailgun key, revoked 2026-09-22 (Jose); value now injected by CI variable
+# 3f2a9c1e0b7d4a5f6c8e9d0a1b2c3d4e5f6a7b8c:src/config/dev.env:generic-api-key:12
+
+# ── Accepted findings ────────────────────────────────────────────────────────
+# Twenty-one jwt hits, all in upstream LiveKit commits (livekit/rust-sdks, authored
+# by LiveKit developers 2022-2025; every commit is an ancestor of upstream/main),
+# found by gitleaks 8.30.1 over the full history of origin/main (740 commits) on
+# 2026-11-05 with the same config the SecretScan stage uses (this repo's
+# .gitleaks.toml + the DisplayNote dn-credential-call-argument rule). Each is a
+# LiveKit access token signed with one of LiveKit's own API keys for LiveKit's own
+# example/test servers, or a unit-test fixture. None was issued by or for
+# DisplayNote, none grants access to DisplayNote infrastructure, and only LiveKit
+# can revoke them. Issuer and expiry come from the decoded claims (the signature
+# was not used). Accepted by Lucio Aragon 2026-11-05.
+#
+# Exception to "never add a fingerprint for a secret that is still valid": that
+# rule is for credentials DisplayNote owns and can rotate. Eight of these tokens
+# carry an expiry in 2030 or 2045, and we cannot tell whether LiveKit's issuing keys
+# still exist. They are third-party credentials that their owner published in its
+# own public repository (livekit/rust-sdks) in 2022-2023, so rewriting this fork's
+# history would not reduce their exposure, and rotating them is LiveKit's call.
+# Any new finding in a DisplayNote commit gets the normal rule: rotate first.
+#
+# LiveKit upstream (9ad7128319, 2022-04-30): upstream example access token for LiveKit's own server, issuer APICkHm83MhghPx, room testroom, identity test; expired 2022-05-23; not a DisplayNote credential, revocable only by LiveKit
+9ad71283193089e17cf8ab833d0d46108549816e:main.cpp:jwt:9
+# LiveKit upstream (8d20e35f02, 2022-05-08): upstream example access token for LiveKit's own server, issuer APICkHm83MhghPx, room testroom, identity test; expired 2022-05-23; not a DisplayNote credential, revocable only by LiveKit
+8d20e35f02ebacdaf5f76d29f8dcadb9c0af4165:main.cpp:jwt:9
+# LiveKit upstream (5c8841de1f, 2022-05-30): upstream example access token for LiveKit's own server, issuer APICkHm83MhghPx, room testroom, identity testidentity; expired 2022-06-29; not a DisplayNote credential, revocable only by LiveKit
+5c8841de1f85538f2f30f0708ad899452d09f87d:main.cpp:jwt:10
+# LiveKit upstream (d9fd69b5c0, 2022-09-12): upstream example access token for LiveKit's own server, issuer APICkHm83MhghPx, room my-first-room, identity user1; expired 2022-10-01; not a DisplayNote credential, revocable only by LiveKit
+d9fd69b5c00cb7b77214ddb5a89efc82e19df757:crates/livekit-core/src/rtc_engine.rs:jwt:56
+# LiveKit upstream (4067a9add6, 2022-09-25): upstream example access token for LiveKit's own server, issuer APICkHm83MhghPx, room my-first-room, identity user1; expired 2022-10-01; not a DisplayNote credential, revocable only by LiveKit
+4067a9add638c109761560a2e0f6ac8ba439e932:crates/livekit-core/src/rtc_engine.rs:jwt:269
+# LiveKit upstream (4067a9add6, 2022-09-25): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity test; expired 2022-12-17; not a DisplayNote credential, revocable only by LiveKit
+4067a9add638c109761560a2e0f6ac8ba439e932:crates/livekit-core/src/signal_client.rs:jwt:181
+# LiveKit upstream (6ad2563348, 2022-09-25): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity test; expired 2022-12-17; not a DisplayNote credential, revocable only by LiveKit
+6ad25633483d78d7c4821ab18e4834fbe025e810:crates/livekit-core/src/rtc_engine.rs:jwt:369
+# LiveKit upstream (0d34e5a48e, 2022-09-29): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity test; expired 2022-12-17; not a DisplayNote credential, revocable only by LiveKit
+0d34e5a48e086014fc8ac2931fbc6e6751dbb07f:crates/livekit-core/src/room.rs:jwt:70
+# LiveKit upstream (2213a70142, 2022-10-02): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity web; expired 2022-11-11; not a DisplayNote credential, revocable only by LiveKit
+2213a70142d06c3d32ffa058447b0a1c6b4f7a93:crates/livekit-core/src/room.rs:jwt:63
+# LiveKit upstream (d64c7e5e08, 2022-10-03): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity web; expired 2022-11-11; not a DisplayNote credential, revocable only by LiveKit
+d64c7e5e08dd1f6de654794fd5996b76def3489e:examples/simple_room/src/main.rs:jwt:5
+# LiveKit upstream (d64c7e5e08, 2022-10-03): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity web; expired 2022-11-11; not a DisplayNote credential, revocable only by LiveKit
+d64c7e5e08dd1f6de654794fd5996b76def3489e:examples/simple_room/src/main.rs:jwt:7
+# LiveKit upstream (754bc80f31, 2022-10-03): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity native; expires 2045-07-27; not a DisplayNote credential, revocable only by LiveKit
+754bc80f31b9bc85d5eb1db54ca990fcb44ae873:examples/simple_room/src/main.rs:jwt:7
+# LiveKit upstream (754bc80f31, 2022-10-03): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity web; expires 2045-07-27; not a DisplayNote credential, revocable only by LiveKit
+754bc80f31b9bc85d5eb1db54ca990fcb44ae873:examples/simple_room/src/main.rs:jwt:9
+# LiveKit upstream (da91efd3a5, 2022-12-07): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity native; expires 2045-07-27; not a DisplayNote credential, revocable only by LiveKit
+da91efd3a5c3baee6e1c6b0f412faf79dfc40507:examples/simple_room/src/app.rs:jwt:15
+# LiveKit upstream (da91efd3a5, 2022-12-07): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity web; expires 2045-07-27; not a DisplayNote credential, revocable only by LiveKit
+da91efd3a5c3baee6e1c6b0f412faf79dfc40507:examples/simple_room/src/app.rs:jwt:17
+# LiveKit upstream (4465afad0c, 2022-12-14): upstream example access token for LiveKit's own server, issuer APIzKbASiCVakgJ, room -, identity native; expires 2045-07-27; not a DisplayNote credential, revocable only by LiveKit
+4465afad0c5292cb3e786b5db9f216ef86d2f38b:examples/simple_room/src/app.rs:jwt:17
+# LiveKit upstream (0fecba1655, 2023-01-01): upstream example access token for LiveKit's own server, issuer APITsEfidZjrQoY, room test, identity native; expires 2030-06-02; not a DisplayNote credential, revocable only by LiveKit
+0fecba1655dc3a562c2ee4bfbfacd609bddac9c3:examples/simple_room/src/app.rs:jwt:19
+# LiveKit upstream (0fecba1655, 2023-01-01): upstream example access token for LiveKit's own server, issuer APITsEfidZjrQoY, room test, identity web; expires 2030-06-02; not a DisplayNote credential, revocable only by LiveKit
+0fecba1655dc3a562c2ee4bfbfacd609bddac9c3:examples/simple_room/src/app.rs:jwt:21
+# LiveKit upstream (6901019812, 2023-07-07): upstream example access token for LiveKit's own server, issuer APITsEfidZjrQoY, room test, identity native; expires 2030-06-02; not a DisplayNote credential, revocable only by LiveKit
+6901019812351395d1f973f24415da85f8c5a5ef:examples/mobile/ios/rust-example/AppDelegate.swift:jwt:17
+# LiveKit upstream (71ef76c582, 2023-07-10): upstream example access token for LiveKit's own server, issuer APITsEfidZjrQoY, room test, identity native; expires 2030-06-02; not a DisplayNote credential, revocable only by LiveKit
+71ef76c582ac393248142e9cecb8d7aaedfd2312:examples/mobile/android/app/src/main/java/io/livekit/rustexample/MainActivity.kt:jwt:22
+# LiveKit upstream (ff4c783a4c, 2025-03-13): unit-test fixture token for livekit-api's token verification test, issuer 'myapikey' (placeholder key); expired 2025-03-13; not a DisplayNote credential, revocable only by LiveKit
+ff4c783a4c0cb31214ebbcac2c23cd332ac0058f:livekit-api/src/test_token.txt:jwt:1
